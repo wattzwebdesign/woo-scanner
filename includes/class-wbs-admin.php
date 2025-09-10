@@ -354,7 +354,7 @@ class WBS_Admin {
                         product_id: product.id,
                         sku: product.sku,
                         name: product.title,
-                        price: parseFloat(product.regular_price || 0),
+                        price: parseFloat(product.sale_price || product.regular_price || 0),
                         quantity: 1,
                         image_url: product.image_url
                     };
