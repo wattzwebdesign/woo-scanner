@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: WooCommerce Barcode Scanner
- * Plugin URI: https://yoursite.com
+ * Plugin URI: https://codewattz.com
  * Description: Scan barcodes to quickly find and edit WooCommerce products
  * Version: 1.0.1
- * Author: Your Name
+ * Author: Code Wattz
  * License: GPL v2 or later
  * Requires at least: 5.0
  * Tested up to: 6.3
@@ -89,7 +89,7 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         }
         
         public function admin_enqueue_scripts($hook) {
-            if ('toplevel_page_woo-barcode-scanner' !== $hook) {
+            if ('toplevel_page_woo-barcode-scanner' !== $hook && 'barcode-scanner_page_wbs-create-order' !== $hook) {
                 return;
             }
             

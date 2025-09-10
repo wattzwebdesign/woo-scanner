@@ -19,6 +19,15 @@ class WBS_Admin {
             'dashicons-search',
             56
         );
+        
+        add_submenu_page(
+            'woo-barcode-scanner',
+            'Create Order',
+            'Create Order',
+            'manage_woocommerce',
+            'wbs-create-order',
+            array($this, 'create_order_page')
+        );
     }
     
     public function admin_page() {
@@ -161,6 +170,574 @@ class WBS_Admin {
         }
         
         return $options;
+    }
+    
+    public function create_order_page() {
+        ?>
+        <div class="wrap" id="wbs-order-wrap">
+            <div class="wbs-header-controls">
+                <h1>Create Order by Barcode</h1>
+                <div class="wbs-header-buttons">
+                    <button type="button" id="wbs-create-order-btn" class="button button-primary" disabled>
+                        Create Order
+                    </button>
+                    <button type="button" id="wbs-clear-order-btn" class="button">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+            
+            <div class="wbs-order-container">
+                <!-- Barcode Scanning Section -->
+                <div class="wbs-scan-section">
+                    <div class="wbs-scan-input-group">
+                        <input type="text" id="wbs-order-scan-input" placeholder="Scan barcode or enter SKU..." autocomplete="off">
+                        <button type="button" id="wbs-order-scan-btn" class="button button-primary">Add Item</button>
+                    </div>
+                    <div id="wbs-scan-status" class="wbs-scan-status"></div>
+                </div>
+                
+                <!-- Order Items Table -->
+                <div class="wbs-order-items">
+                    <h3>Order Items (<span id="wbs-items-count">0</span>)</h3>
+                    <table class="wp-list-table widefat fixed striped" id="wbs-order-items-table">
+                        <thead>
+                            <tr>
+                                <th width="10%">Image</th>
+                                <th width="15%">SKU</th>
+                                <th width="35%">Product</th>
+                                <th width="10%">Qty</th>
+                                <th width="15%">Price</th>
+                                <th width="15%">Total</th>
+                                <th width="10%">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wbs-order-items-tbody">
+                            <tr id="wbs-no-items">
+                                <td colspan="7" class="wbs-no-items">No items added yet. Start scanning barcodes to add products.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="wbs-order-total">
+                        <strong>Order Total: $<span id="wbs-order-total">0.00</span></strong>
+                    </div>
+                </div>
+                
+                <!-- Order Details Section -->
+                <div class="wbs-order-details" id="wbs-order-details" style="display: none;">
+                    <h3>Order Details</h3>
+                    <form id="wbs-order-form">
+                        <div class="wbs-order-form-row">
+                            <div class="wbs-form-group wbs-customer-email-group">
+                                <label for="wbs-customer-email">Customer Email</label>
+                                <div class="wbs-autocomplete-wrapper">
+                                    <input type="email" id="wbs-customer-email" name="customer_email" class="wbs-input" placeholder="customer@example.com" autocomplete="off">
+                                    <div class="wbs-customer-suggestions" id="wbs-customer-suggestions"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="wbs-form-group">
+                                <label for="wbs-customer-name">Customer Name</label>
+                                <input type="text" id="wbs-customer-name" name="customer_name" class="wbs-input" placeholder="John Doe">
+                            </div>
+                            
+                            <div class="wbs-form-group">
+                                <label for="wbs-order-status">Order Status</label>
+                                <select id="wbs-order-status" name="order_status" class="wbs-input">
+                                    <option value="pending">Pending</option>
+                                    <option value="processing">Processing</option>
+                                    <option value="on-hold">On Hold</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="refunded">Refunded</option>
+                                    <option value="failed">Failed</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="wbs-order-form-row">
+                            <div class="wbs-form-group">
+                                <label for="wbs-order-notes">Order Notes</label>
+                                <textarea id="wbs-order-notes" name="order_notes" class="wbs-input" rows="3" placeholder="Optional order notes..."></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            let orderItems = [];
+            let itemCounter = 0;
+            
+            // Auto-focus on scan input
+            $('#wbs-order-scan-input').focus();
+            
+            // Handle barcode scanning - auto-add after typing stops
+            let scanTimeout;
+            $('#wbs-order-scan-input').on('input', function() {
+                clearTimeout(scanTimeout);
+                const scanInput = $(this);
+                const searchTerm = scanInput.val().trim();
+                
+                if (searchTerm.length >= 3) { // Start searching after 3 characters
+                    scanTimeout = setTimeout(function() {
+                        addItemToOrder();
+                    }, 500); // Wait 500ms after user stops typing
+                }
+            });
+            
+            // Also handle Enter key for immediate search
+            $('#wbs-order-scan-input').on('keypress', function(e) {
+                if (e.which === 13) { // Enter key
+                    e.preventDefault();
+                    clearTimeout(scanTimeout); // Cancel the timeout
+                    addItemToOrder();
+                }
+            });
+            
+            $('#wbs-order-scan-btn').click(function() {
+                addItemToOrder();
+            });
+            
+            function addItemToOrder() {
+                const scanInput = $('#wbs-order-scan-input');
+                const searchTerm = scanInput.val().trim();
+                
+                if (!searchTerm) {
+                    showScanStatus('Please enter a barcode or SKU', 'error');
+                    return;
+                }
+                
+                showScanStatus('Searching...', 'loading');
+                
+                $.ajax({
+                    url: wbs_ajax.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'wbs_search_product',
+                        search_term: searchTerm,
+                        nonce: wbs_ajax.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            const wasAdded = addProductToOrder(response.data);
+                            scanInput.val('').focus();
+                            
+                            if (wasAdded) {
+                                showScanStatus('Product added successfully!', 'success');
+                                setTimeout(() => clearScanStatus(), 2000);
+                            }
+                            // If not added (duplicate), the error message is already shown by addProductToOrder
+                        } else {
+                            showScanStatus('Product not found: ' + searchTerm, 'error');
+                        }
+                    },
+                    error: function() {
+                        showScanStatus('Error searching for product', 'error');
+                    }
+                });
+            }
+            
+            function addProductToOrder(product) {
+                // Check if product already exists
+                let existingItem = orderItems.find(item => item.product_id === product.id);
+                
+                if (existingItem) {
+                    showScanStatus('Product already in this order: ' + product.title, 'error');
+                    return false; // Return false to indicate item was not added
+                } else {
+                    const item = {
+                        id: ++itemCounter,
+                        product_id: product.id,
+                        sku: product.sku,
+                        name: product.title,
+                        price: parseFloat(product.regular_price || 0),
+                        quantity: 1,
+                        image_url: product.image_url
+                    };
+                    
+                    orderItems.push(item);
+                    updateOrderDisplay();
+                    return true; // Return true to indicate item was added successfully
+                }
+            }
+            
+            function updateOrderDisplay() {
+                const tbody = $('#wbs-order-items-tbody');
+                tbody.empty();
+                
+                if (orderItems.length === 0) {
+                    tbody.append('<tr id="wbs-no-items"><td colspan="7" class="wbs-no-items">No items added yet. Start scanning barcodes to add products.</td></tr>');
+                    $('#wbs-order-details').hide();
+                    $('#wbs-create-order-btn').prop('disabled', true);
+                } else {
+                    orderItems.forEach(item => {
+                        const total = (item.price * item.quantity).toFixed(2);
+                        const imageHtml = item.image_url ? 
+                            `<img src="${item.image_url}" alt="Product" style="width: 50px; height: 50px; object-fit: cover;">` : 
+                            '<div class="wbs-no-image-small">No Image</div>';
+                            
+                        tbody.append(`
+                            <tr data-item-id="${item.id}">
+                                <td>${imageHtml}</td>
+                                <td>${item.sku}</td>
+                                <td>${item.name}</td>
+                                <td>
+                                    <input type="number" class="wbs-qty-input" value="${item.quantity}" min="1" data-item-id="${item.id}">
+                                </td>
+                                <td>$${item.price.toFixed(2)}</td>
+                                <td>$${total}</td>
+                                <td>
+                                    <button type="button" class="button wbs-remove-item" data-item-id="${item.id}">Remove</button>
+                                </td>
+                            </tr>
+                        `);
+                    });
+                    
+                    $('#wbs-order-details').show();
+                    $('#wbs-create-order-btn').prop('disabled', false);
+                }
+                
+                updateOrderSummary();
+            }
+            
+            function updateOrderSummary() {
+                const total = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                $('#wbs-order-total').text(total.toFixed(2));
+                $('#wbs-items-count').text(orderItems.length);
+            }
+            
+            // Handle quantity changes
+            $(document).on('change', '.wbs-qty-input', function() {
+                const itemId = parseInt($(this).data('item-id'));
+                const newQty = parseInt($(this).val()) || 1;
+                
+                const item = orderItems.find(item => item.id === itemId);
+                if (item) {
+                    item.quantity = Math.max(1, newQty);
+                    updateOrderDisplay();
+                }
+            });
+            
+            // Handle item removal
+            $(document).on('click', '.wbs-remove-item', function() {
+                const itemId = parseInt($(this).data('item-id'));
+                orderItems = orderItems.filter(item => item.id !== itemId);
+                updateOrderDisplay();
+            });
+            
+            // Handle clear all
+            $('#wbs-clear-order-btn').click(function() {
+                if (confirm('Are you sure you want to clear all items?')) {
+                    orderItems = [];
+                    itemCounter = 0;
+                    updateOrderDisplay();
+                    clearScanStatus();
+                    $('#wbs-order-form')[0].reset();
+                }
+            });
+            
+            // Handle order creation
+            $('#wbs-create-order-btn').click(function() {
+                if (orderItems.length === 0) {
+                    alert('Please add at least one item to create an order.');
+                    return;
+                }
+                
+                const orderData = {
+                    items: orderItems,
+                    customer_email: $('#wbs-customer-email').val(),
+                    customer_name: $('#wbs-customer-name').val(),
+                    order_status: $('#wbs-order-status').val(),
+                    order_notes: $('#wbs-order-notes').val()
+                };
+                
+                $(this).prop('disabled', true).text('Creating Order...');
+                
+                $.ajax({
+                    url: wbs_ajax.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'wbs_create_order',
+                        order_data: orderData,
+                        nonce: wbs_ajax.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Order created successfully! Order ID: ' + response.data.order_id);
+                            // Reset form
+                            orderItems = [];
+                            itemCounter = 0;
+                            updateOrderDisplay();
+                            $('#wbs-order-form')[0].reset();
+                            clearScanStatus();
+                        } else {
+                            alert('Error creating order: ' + response.data);
+                        }
+                    },
+                    error: function() {
+                        alert('Error creating order. Please try again.');
+                    },
+                    complete: function() {
+                        $('#wbs-create-order-btn').prop('disabled', false).text('Create Order');
+                    }
+                });
+            });
+            
+            function showScanStatus(message, type) {
+                const statusDiv = $('#wbs-scan-status');
+                statusDiv.removeClass('success error loading').addClass(type);
+                statusDiv.text(message).show();
+            }
+            
+            function clearScanStatus() {
+                $('#wbs-scan-status').hide().text('');
+            }
+            
+            // Customer email autocomplete
+            let customerSearchTimeout;
+            $('#wbs-customer-email').on('input', function() {
+                clearTimeout(customerSearchTimeout);
+                const email = $(this).val().trim();
+                const suggestionsDiv = $('#wbs-customer-suggestions');
+                
+                if (email.length >= 3) {
+                    customerSearchTimeout = setTimeout(function() {
+                        searchCustomers(email);
+                    }, 300);
+                } else {
+                    suggestionsDiv.hide().empty();
+                }
+            });
+            
+            function searchCustomers(searchTerm) {
+                $.ajax({
+                    url: wbs_ajax.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'wbs_search_customers',
+                        search_term: searchTerm,
+                        nonce: wbs_ajax.nonce
+                    },
+                    success: function(response) {
+                        if (response.success && response.data.length > 0) {
+                            showCustomerSuggestions(response.data);
+                        } else {
+                            $('#wbs-customer-suggestions').hide().empty();
+                        }
+                    }
+                });
+            }
+            
+            function showCustomerSuggestions(customers) {
+                const suggestionsDiv = $('#wbs-customer-suggestions');
+                suggestionsDiv.empty();
+                
+                customers.forEach(customer => {
+                    const suggestion = $(`
+                        <div class="wbs-customer-suggestion" data-customer-id="${customer.id}" data-email="${customer.email}" data-name="${customer.display_name}">
+                            <div class="wbs-customer-email">${customer.email}</div>
+                            <div class="wbs-customer-name">${customer.display_name}</div>
+                        </div>
+                    `);
+                    
+                    suggestion.on('click', function() {
+                        const customerId = $(this).data('customer-id');
+                        const customerEmail = $(this).data('email');
+                        const customerName = $(this).data('name');
+                        
+                        $('#wbs-customer-email').val(customerEmail);
+                        $('#wbs-customer-name').val(customerName);
+                        suggestionsDiv.hide().empty();
+                    });
+                    
+                    suggestionsDiv.append(suggestion);
+                });
+                
+                suggestionsDiv.show();
+            }
+            
+            // Hide suggestions when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.wbs-customer-email-group').length) {
+                    $('#wbs-customer-suggestions').hide();
+                }
+            });
+        });
+        </script>
+        
+        <style>
+        .wbs-order-container {
+            max-width: 1200px;
+        }
+        
+        .wbs-scan-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .wbs-scan-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        #wbs-order-scan-input {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .wbs-scan-status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .wbs-scan-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .wbs-scan-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .wbs-scan-status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .wbs-order-items {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .wbs-no-items {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .wbs-no-image-small {
+            width: 50px;
+            height: 50px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .wbs-qty-input {
+            width: 60px;
+            text-align: center;
+        }
+        
+        .wbs-order-total {
+            text-align: right;
+            margin-top: 15px;
+            font-size: 18px;
+        }
+        
+        .wbs-order-details {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+        }
+        
+        .wbs-order-form-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .wbs-order-form-row .wbs-form-group {
+            flex: 1;
+        }
+        
+        .wbs-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .wbs-form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        /* Customer autocomplete styles */
+        .wbs-autocomplete-wrapper {
+            position: relative;
+        }
+        
+        .wbs-customer-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .wbs-customer-suggestion {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .wbs-customer-suggestion:hover {
+            background: #f5f5f5;
+        }
+        
+        .wbs-customer-suggestion:last-child {
+            border-bottom: none;
+        }
+        
+        .wbs-customer-email {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .wbs-customer-name {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .wbs-customer-email-group {
+            position: relative;
+        }
+        </style>
+        <?php
     }
 }
 

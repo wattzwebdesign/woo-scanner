@@ -8,6 +8,8 @@ class WBS_Ajax {
     public function __construct() {
         add_action('wp_ajax_wbs_search_product', array($this, 'search_product'));
         add_action('wp_ajax_wbs_update_product', array($this, 'update_product'));
+        add_action('wp_ajax_wbs_create_order', array($this, 'create_order'));
+        add_action('wp_ajax_wbs_search_customers', array($this, 'search_customers'));
     }
     
     public function search_product() {
@@ -161,6 +163,128 @@ class WBS_Ajax {
             'consignor_number' => $consignor_number ?: '',
             'image_url' => $image_url ?: ''
         );
+    }
+    
+    public function create_order() {
+        check_ajax_referer('wbs_nonce', 'nonce');
+        
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Unauthorized');
+        }
+        
+        $order_data = $_POST['order_data'];
+        
+        if (empty($order_data['items']) || !is_array($order_data['items'])) {
+            wp_send_json_error('No items provided for the order');
+        }
+        
+        try {
+            // Create the order
+            $order = wc_create_order();
+            
+            if (is_wp_error($order)) {
+                wp_send_json_error('Failed to create order: ' . $order->get_error_message());
+            }
+            
+            // Add items to the order
+            foreach ($order_data['items'] as $item) {
+                $product = wc_get_product($item['product_id']);
+                
+                if (!$product) {
+                    continue; // Skip invalid products
+                }
+                
+                $order->add_product($product, $item['quantity']);
+            }
+            
+            // Set customer information if provided
+            if (!empty($order_data['customer_email'])) {
+                // Try to find existing user by email
+                $user = get_user_by('email', sanitize_email($order_data['customer_email']));
+                
+                if ($user) {
+                    $order->set_customer_id($user->ID);
+                } else {
+                    // Set as guest order with email
+                    $order->set_billing_email(sanitize_email($order_data['customer_email']));
+                }
+            }
+            
+            // Set customer name if provided
+            if (!empty($order_data['customer_name'])) {
+                $name_parts = explode(' ', sanitize_text_field($order_data['customer_name']), 2);
+                $first_name = $name_parts[0] ?? '';
+                $last_name = $name_parts[1] ?? '';
+                
+                $order->set_billing_first_name($first_name);
+                $order->set_billing_last_name($last_name);
+                $order->set_shipping_first_name($first_name);
+                $order->set_shipping_last_name($last_name);
+            }
+            
+            // Set order status
+            if (!empty($order_data['order_status'])) {
+                $order->set_status(sanitize_text_field($order_data['order_status']));
+            }
+            
+            // Add order notes
+            if (!empty($order_data['order_notes'])) {
+                $order->add_order_note(sanitize_textarea_field($order_data['order_notes']));
+            }
+            
+            // Calculate totals
+            $order->calculate_totals();
+            
+            // Save the order
+            $order->save();
+            
+            wp_send_json_success(array(
+                'order_id' => $order->get_id(),
+                'order_number' => $order->get_order_number(),
+                'total' => $order->get_total()
+            ));
+            
+        } catch (Exception $e) {
+            wp_send_json_error('Error creating order: ' . $e->getMessage());
+        }
+    }
+    
+    public function search_customers() {
+        check_ajax_referer('wbs_nonce', 'nonce');
+        
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Unauthorized');
+        }
+        
+        $search_term = sanitize_text_field($_POST['search_term']);
+        
+        if (empty($search_term) || strlen($search_term) < 3) {
+            wp_send_json_error('Search term too short');
+        }
+        
+        // Search for users by email
+        $users = get_users(array(
+            'search' => '*' . $search_term . '*',
+            'search_columns' => array('user_email'),
+            'number' => 10 // Limit to 10 results
+        ));
+        
+        $customers = array();
+        
+        foreach ($users as $user) {
+            // Get customer data
+            $customer = new WC_Customer($user->ID);
+            
+            $customers[] = array(
+                'id' => $user->ID,
+                'email' => $user->user_email,
+                'first_name' => $customer->get_first_name(),
+                'last_name' => $customer->get_last_name(),
+                'display_name' => trim($customer->get_first_name() . ' ' . $customer->get_last_name()) ?: $user->display_name
+            );
+        }
+        
+        wp_send_json_success($customers);
     }
 }
 
