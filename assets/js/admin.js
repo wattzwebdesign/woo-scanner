@@ -1,20 +1,43 @@
 jQuery(document).ready(function($) {
-    let scanInput = $('#wbs-scan-input');
-    let scanBtn = $('#wbs-scan-btn');
-    let scanResult = $('#wbs-scan-result');
-    let productEditor = $('#wbs-product-editor');
-    let productForm = $('#wbs-product-form');
+    var scanInput = $('#wbs-scan-input');
+    var scanBtn = $('#wbs-scan-btn');
+    var scanResult = $('#wbs-scan-result');
+    var productEditor = $('#wbs-product-editor');
+    var productForm = $('#wbs-product-form');
+    var searchTimeout;
+    
+    if (scanInput.length === 0) {
+        return;
+    }
     
     scanInput.focus();
     
+    // Auto-search while typing with delay for barcode scanners
+    scanInput.on('input', function() {
+        clearTimeout(searchTimeout);
+        const searchTerm = $(this).val().trim();
+        
+        if (searchTerm.length >= 6) { // Wait for at least 6 characters (typical barcode minimum)
+            searchTimeout = setTimeout(function() {
+                const finalValue = scanInput.val().trim();
+                if (finalValue.length >= 6) {
+                    searchProduct();
+                }
+            }, 100); // 100ms delay to ensure complete barcode input
+        }
+    });
+    
+    // Keep Enter key functionality for manual entry
     scanInput.on('keypress', function(e) {
         if (e.which === 13) {
             e.preventDefault();
+            clearTimeout(searchTimeout);
             searchProduct();
         }
     });
     
     scanBtn.on('click', function() {
+        clearTimeout(searchTimeout);
         searchProduct();
     });
     

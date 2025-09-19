@@ -56,7 +56,7 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         private function define_constants() {
             define('WBS_PLUGIN_URL', plugin_dir_url(__FILE__));
             define('WBS_PLUGIN_PATH', plugin_dir_path(__FILE__));
-            define('WBS_VERSION', '1.0.3');
+            define('WBS_VERSION', '1.0.1');
         }
         
         private function includes() {
@@ -96,8 +96,8 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
                 return;
             }
             
-            error_log('WBS Debug: Enqueuing script at: ' . WBS_PLUGIN_URL . 'assets/js/admin.js');
-            wp_enqueue_script('wbs-admin', WBS_PLUGIN_URL . 'assets/js/admin.js', array('jquery'), WBS_VERSION, true);
+            error_log('WBS Debug: Enqueuing script at: ' . WBS_PLUGIN_URL . 'assets/js/admin-test.js');
+            wp_enqueue_script('wbs-admin', WBS_PLUGIN_URL . 'assets/js/admin-test.js', array('jquery'), WBS_VERSION, true);
             wp_enqueue_style('wbs-admin', WBS_PLUGIN_URL . 'assets/css/admin.css', array(), WBS_VERSION);
             
             wp_localize_script('wbs-admin', 'wbs_ajax', array(
