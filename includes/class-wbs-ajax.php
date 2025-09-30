@@ -50,6 +50,12 @@ class WBS_Ajax {
         }
         
         try {
+            // Update product title
+            if (isset($_POST['product_title']) && $_POST['product_title'] !== '') {
+                $product_title = sanitize_text_field($_POST['product_title']);
+                $product->set_name($product_title);
+            }
+            
             // Update basic product data (SKU is readonly, so skip it)
             if (isset($_POST['regular_price']) && $_POST['regular_price'] !== '') {
                 $regular_price = sanitize_text_field($_POST['regular_price']);

@@ -23,7 +23,7 @@ jQuery(document).ready(function($) {
                 if (finalValue.length >= 6) {
                     searchProduct();
                 }
-            }, 100); // 100ms delay to ensure complete barcode input
+            }, 2000); // 2 second delay to wait for complete typing
         }
     });
     
@@ -85,7 +85,7 @@ jQuery(document).ready(function($) {
     function populateProductForm(data) {
         $('#wbs-product-id').val(data.id);
         $('#wbs-product-id-display').text(data.id);
-        $('#wbs-product-title-display').text(data.title);
+        $('#wbs-product-title').val(data.title);
         $('#wbs-sku').val(data.sku);
         $('#wbs-regular-price').val(data.regular_price);
         $('#wbs-sale-price').val(data.sale_price);

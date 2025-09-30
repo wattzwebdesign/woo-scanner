@@ -76,7 +76,10 @@ class WBS_Admin {
                                 <div class="wbs-product-header">
                                     <div class="wbs-product-title-section">
                                         <div class="wbs-product-id">#<span id="wbs-product-id-display"></span></div>
-                                        <h3 id="wbs-product-title-display" class="wbs-product-title"></h3>
+                                        <div class="wbs-form-group">
+                                            <label for="wbs-product-title">Product Title</label>
+                                            <input type="text" id="wbs-product-title" name="product_title" class="wbs-input wbs-title-input">
+                                        </div>
                                     </div>
                                 </div>
                                 
