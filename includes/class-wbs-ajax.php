@@ -10,6 +10,7 @@ class WBS_Ajax {
         add_action('wp_ajax_wbs_update_product', array($this, 'update_product'));
         add_action('wp_ajax_wbs_create_order', array($this, 'create_order'));
         add_action('wp_ajax_wbs_search_customers', array($this, 'search_customers'));
+        add_action('wp_ajax_wbs_validate_coupon', array($this, 'validate_coupon'));
     }
     
     public function search_product() {
@@ -221,28 +222,43 @@ class WBS_Ajax {
                 $name_parts = explode(' ', sanitize_text_field($order_data['customer_name']), 2);
                 $first_name = $name_parts[0] ?? '';
                 $last_name = $name_parts[1] ?? '';
-                
+
                 $order->set_billing_first_name($first_name);
                 $order->set_billing_last_name($last_name);
                 $order->set_shipping_first_name($first_name);
                 $order->set_shipping_last_name($last_name);
             }
-            
-            // Set order status
-            if (!empty($order_data['order_status'])) {
-                $order->set_status(sanitize_text_field($order_data['order_status']));
-            }
-            
+
             // Add order notes
             if (!empty($order_data['order_notes'])) {
                 $order->add_order_note(sanitize_textarea_field($order_data['order_notes']));
             }
-            
-            // Calculate totals
+
+            // IMPORTANT: Apply coupon BEFORE setting status
+            // This ensures commission calculations use the post-discount amount
+            if (!empty($order_data['coupon_code'])) {
+                $coupon_code = sanitize_text_field($order_data['coupon_code']);
+                $coupon = new WC_Coupon($coupon_code);
+
+                if ($coupon && $coupon->get_id() && $coupon->is_valid()) {
+                    $order->apply_coupon($coupon_code);
+                }
+            }
+
+            // Calculate totals BEFORE setting status
+            // This ensures all discounts are applied before commission hooks fire
             $order->calculate_totals();
-            
-            // Save the order
+
+            // Save the order FIRST before setting status
+            // This persists the coupon discount to the order items
             $order->save();
+
+            // Set order status LAST
+            // This triggers commission calculation hooks AFTER coupons are applied
+            if (!empty($order_data['order_status'])) {
+                $order->set_status(sanitize_text_field($order_data['order_status']));
+                $order->save(); // Save again after status change
+            }
             
             wp_send_json_success(array(
                 'order_id' => $order->get_id(),
@@ -291,6 +307,51 @@ class WBS_Ajax {
         }
         
         wp_send_json_success($customers);
+    }
+
+    public function validate_coupon() {
+        check_ajax_referer('wbs_nonce', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Unauthorized');
+        }
+
+        $coupon_code = sanitize_text_field($_POST['coupon_code']);
+
+        if (empty($coupon_code)) {
+            wp_send_json_error('Coupon code is required');
+        }
+
+        // Get coupon by code
+        $coupon = new WC_Coupon($coupon_code);
+
+        if (!$coupon || !$coupon->get_id()) {
+            wp_send_json_error('Invalid coupon code');
+        }
+
+        // Check if coupon is valid
+        if (!$coupon->is_valid()) {
+            $error_message = 'This coupon is not valid';
+
+            // Get more specific error message
+            if ($coupon->get_date_expires() && time() > $coupon->get_date_expires()->getTimestamp()) {
+                $error_message = 'This coupon has expired';
+            } elseif ($coupon->get_usage_limit() && $coupon->get_usage_count() >= $coupon->get_usage_limit()) {
+                $error_message = 'This coupon has reached its usage limit';
+            }
+
+            wp_send_json_error($error_message);
+        }
+
+        // Return coupon data
+        $coupon_data = array(
+            'code' => $coupon->get_code(),
+            'discount_type' => $coupon->get_discount_type(),
+            'amount' => $coupon->get_amount(),
+            'description' => $coupon->get_description()
+        );
+
+        wp_send_json_success($coupon_data);
     }
 }
 

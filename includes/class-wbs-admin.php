@@ -198,6 +198,19 @@ class WBS_Admin {
                         <button type="button" id="wbs-order-scan-btn" class="button button-primary">Add Item</button>
                     </div>
                     <div id="wbs-scan-status" class="wbs-scan-status"></div>
+
+                    <!-- Bulk SKU Paste Section -->
+                    <div class="wbs-bulk-section">
+                        <div class="wbs-bulk-header">
+                            <h4>Or paste multiple SKUs (one per line):</h4>
+                        </div>
+                        <textarea id="wbs-bulk-sku-input" placeholder="Paste SKUs here, one per line...&#10;Example:&#10;SKU-001&#10;SKU-002&#10;SKU-003" rows="6"></textarea>
+                        <div class="wbs-bulk-actions">
+                            <button type="button" id="wbs-bulk-add-btn" class="button button-primary">Bulk Add Items</button>
+                            <button type="button" id="wbs-bulk-clear-btn" class="button">Clear</button>
+                        </div>
+                        <div id="wbs-bulk-status" class="wbs-bulk-status"></div>
+                    </div>
                 </div>
                 
                 <!-- Order Items Table -->
@@ -223,7 +236,18 @@ class WBS_Admin {
                     </table>
                     
                     <div class="wbs-order-total">
-                        <strong>Order Total: $<span id="wbs-order-total">0.00</span></strong>
+                        <div class="wbs-order-subtotal">
+                            <span>Subtotal:</span>
+                            <span>$<span id="wbs-order-subtotal">0.00</span></span>
+                        </div>
+                        <div class="wbs-order-discount" id="wbs-order-discount-row" style="display: none;">
+                            <span>Discount (<span id="wbs-applied-coupon-code"></span>):</span>
+                            <span class="wbs-discount-amount">-$<span id="wbs-order-discount">0.00</span></span>
+                        </div>
+                        <div class="wbs-order-total-row">
+                            <strong>Total:</strong>
+                            <strong>$<span id="wbs-order-total">0.00</span></strong>
+                        </div>
                     </div>
                 </div>
                 
@@ -239,12 +263,12 @@ class WBS_Admin {
                                     <div class="wbs-customer-suggestions" id="wbs-customer-suggestions"></div>
                                 </div>
                             </div>
-                            
+
                             <div class="wbs-form-group">
                                 <label for="wbs-customer-name">Customer Name</label>
                                 <input type="text" id="wbs-customer-name" name="customer_name" class="wbs-input" placeholder="John Doe">
                             </div>
-                            
+
                             <div class="wbs-form-group">
                                 <label for="wbs-order-status">Order Status</label>
                                 <select id="wbs-order-status" name="order_status" class="wbs-input">
@@ -256,6 +280,17 @@ class WBS_Admin {
                                     <option value="refunded">Refunded</option>
                                     <option value="failed">Failed</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <div class="wbs-order-form-row">
+                            <div class="wbs-form-group">
+                                <label for="wbs-coupon-code">Coupon Code</label>
+                                <div class="wbs-coupon-wrapper">
+                                    <input type="text" id="wbs-coupon-code" name="coupon_code" class="wbs-input" placeholder="Enter coupon code...">
+                                    <button type="button" id="wbs-apply-coupon-btn" class="button">Apply Coupon</button>
+                                </div>
+                                <div id="wbs-coupon-status" class="wbs-coupon-status"></div>
                             </div>
                         </div>
                         
@@ -274,6 +309,7 @@ class WBS_Admin {
         jQuery(document).ready(function($) {
             let orderItems = [];
             let itemCounter = 0;
+            let appliedCoupon = null;
             
             // Auto-focus on scan input
             $('#wbs-order-scan-input').focus();
@@ -408,9 +444,40 @@ class WBS_Admin {
             }
             
             function updateOrderSummary() {
-                const total = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                let discount = 0;
+                let total = subtotal;
+
+                // Apply coupon discount if available
+                if (appliedCoupon) {
+                    discount = calculateDiscount(subtotal, appliedCoupon);
+                    total = subtotal - discount;
+
+                    $('#wbs-order-discount-row').show();
+                    $('#wbs-order-discount').text(discount.toFixed(2));
+                    $('#wbs-applied-coupon-code').text(appliedCoupon.code);
+                } else {
+                    $('#wbs-order-discount-row').hide();
+                }
+
+                $('#wbs-order-subtotal').text(subtotal.toFixed(2));
                 $('#wbs-order-total').text(total.toFixed(2));
                 $('#wbs-items-count').text(orderItems.length);
+            }
+
+            function calculateDiscount(subtotal, coupon) {
+                let discount = 0;
+
+                if (coupon.discount_type === 'percent') {
+                    discount = (subtotal * parseFloat(coupon.amount)) / 100;
+                } else if (coupon.discount_type === 'fixed_cart') {
+                    discount = parseFloat(coupon.amount);
+                }
+
+                // Don't let discount exceed subtotal
+                discount = Math.min(discount, subtotal);
+
+                return discount;
             }
             
             // Handle quantity changes
@@ -437,10 +504,67 @@ class WBS_Admin {
                 if (confirm('Are you sure you want to clear all items?')) {
                     orderItems = [];
                     itemCounter = 0;
+                    appliedCoupon = null;
                     updateOrderDisplay();
                     clearScanStatus();
+                    clearCouponStatus();
                     $('#wbs-order-form')[0].reset();
                 }
+            });
+
+            // Handle coupon application
+            $('#wbs-apply-coupon-btn').click(function() {
+                const couponCode = $('#wbs-coupon-code').val().trim();
+
+                if (!couponCode) {
+                    showCouponStatus('Please enter a coupon code', 'error');
+                    return;
+                }
+
+                if (orderItems.length === 0) {
+                    showCouponStatus('Please add items to the order first', 'error');
+                    return;
+                }
+
+                $(this).prop('disabled', true).text('Validating...');
+                showCouponStatus('Validating coupon...', 'loading');
+
+                $.ajax({
+                    url: wbs_ajax.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'wbs_validate_coupon',
+                        coupon_code: couponCode,
+                        nonce: wbs_ajax.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            appliedCoupon = response.data;
+                            updateOrderSummary();
+                            showCouponStatus('Coupon applied successfully!', 'success');
+                            $('#wbs-apply-coupon-btn').text('Remove').data('action', 'remove');
+                            $('#wbs-coupon-code').prop('readonly', true);
+                        } else {
+                            showCouponStatus(response.data || 'Invalid coupon code', 'error');
+                        }
+                    },
+                    error: function() {
+                        showCouponStatus('Error validating coupon', 'error');
+                    },
+                    complete: function() {
+                        $('#wbs-apply-coupon-btn').prop('disabled', false);
+                    }
+                });
+            });
+
+            // Handle coupon removal
+            $(document).on('click', '#wbs-apply-coupon-btn[data-action="remove"]', function(e) {
+                e.preventDefault();
+                appliedCoupon = null;
+                updateOrderSummary();
+                $('#wbs-coupon-code').val('').prop('readonly', false);
+                $('#wbs-apply-coupon-btn').text('Apply Coupon').removeData('action');
+                clearCouponStatus();
             });
             
             // Handle order creation
@@ -455,7 +579,8 @@ class WBS_Admin {
                     customer_email: $('#wbs-customer-email').val(),
                     customer_name: $('#wbs-customer-name').val(),
                     order_status: $('#wbs-order-status').val(),
-                    order_notes: $('#wbs-order-notes').val()
+                    order_notes: $('#wbs-order-notes').val(),
+                    coupon_code: appliedCoupon ? appliedCoupon.code : null
                 };
                 
                 $(this).prop('disabled', true).text('Creating Order...');
@@ -474,9 +599,12 @@ class WBS_Admin {
                             // Reset form
                             orderItems = [];
                             itemCounter = 0;
+                            appliedCoupon = null;
                             updateOrderDisplay();
                             $('#wbs-order-form')[0].reset();
                             clearScanStatus();
+                            clearCouponStatus();
+                            $('#wbs-apply-coupon-btn').text('Apply Coupon').removeData('action');
                         } else {
                             alert('Error creating order: ' + response.data);
                         }
@@ -498,6 +626,16 @@ class WBS_Admin {
             
             function clearScanStatus() {
                 $('#wbs-scan-status').hide().text('');
+            }
+
+            function showCouponStatus(message, type) {
+                const statusDiv = $('#wbs-coupon-status');
+                statusDiv.removeClass('success error loading').addClass(type);
+                statusDiv.text(message).show();
+            }
+
+            function clearCouponStatus() {
+                $('#wbs-coupon-status').hide().text('');
             }
             
             // Customer email autocomplete
@@ -569,6 +707,136 @@ class WBS_Admin {
                     $('#wbs-customer-suggestions').hide();
                 }
             });
+
+            // Bulk SKU processing
+            $('#wbs-bulk-add-btn').click(function() {
+                const bulkInput = $('#wbs-bulk-sku-input');
+                const skusText = bulkInput.val().trim();
+
+                if (!skusText) {
+                    showBulkStatus('Please paste at least one SKU', 'error');
+                    return;
+                }
+
+                // Split by newlines and filter out empty lines
+                const skus = skusText.split('\n')
+                    .map(sku => sku.trim())
+                    .filter(sku => sku.length > 0);
+
+                if (skus.length === 0) {
+                    showBulkStatus('No valid SKUs found', 'error');
+                    return;
+                }
+
+                processBulkSKUs(skus);
+            });
+
+            $('#wbs-bulk-clear-btn').click(function() {
+                $('#wbs-bulk-sku-input').val('');
+                clearBulkStatus();
+            });
+
+            function processBulkSKUs(skus) {
+                const totalSKUs = skus.length;
+                let processedCount = 0;
+                let successCount = 0;
+                let failedSKUs = [];
+
+                // Disable the button during processing
+                $('#wbs-bulk-add-btn').prop('disabled', true).text('Processing...');
+
+                showBulkStatus(`Processing ${totalSKUs} SKUs...`, 'loading');
+
+                // Process SKUs sequentially to avoid overwhelming the server
+                function processNextSKU(index) {
+                    if (index >= skus.length) {
+                        // All done
+                        finishBulkProcessing();
+                        return;
+                    }
+
+                    const sku = skus[index];
+
+                    $.ajax({
+                        url: wbs_ajax.ajax_url,
+                        type: 'POST',
+                        data: {
+                            action: 'wbs_search_product',
+                            search_term: sku,
+                            nonce: wbs_ajax.nonce
+                        },
+                        success: function(response) {
+                            processedCount++;
+
+                            if (response.success) {
+                                const wasAdded = addProductToOrder(response.data);
+                                if (wasAdded) {
+                                    successCount++;
+                                } else {
+                                    // Product already in order
+                                    failedSKUs.push({sku: sku, reason: 'Already in order'});
+                                }
+                            } else {
+                                failedSKUs.push({sku: sku, reason: 'Not found'});
+                            }
+
+                            // Update progress
+                            showBulkStatus(`Processing ${processedCount}/${totalSKUs} SKUs... (${successCount} added)`, 'loading');
+
+                            // Process next SKU
+                            processNextSKU(index + 1);
+                        },
+                        error: function() {
+                            processedCount++;
+                            failedSKUs.push({sku: sku, reason: 'Error searching'});
+
+                            // Update progress
+                            showBulkStatus(`Processing ${processedCount}/${totalSKUs} SKUs... (${successCount} added)`, 'loading');
+
+                            // Process next SKU
+                            processNextSKU(index + 1);
+                        }
+                    });
+                }
+
+                function finishBulkProcessing() {
+                    $('#wbs-bulk-add-btn').prop('disabled', false).text('Bulk Add Items');
+
+                    let message = `Completed: ${successCount} of ${totalSKUs} items added`;
+
+                    if (failedSKUs.length > 0) {
+                        message += '<br><strong>Failed SKUs:</strong><br>';
+                        failedSKUs.forEach(item => {
+                            message += `• ${item.sku} - ${item.reason}<br>`;
+                        });
+                        showBulkStatus(message, 'partial');
+                    } else {
+                        showBulkStatus(message, 'success');
+                    }
+
+                    // Clear the textarea if all were successful
+                    if (failedSKUs.length === 0) {
+                        $('#wbs-bulk-sku-input').val('');
+                    } else {
+                        // Keep only failed SKUs in the textarea for retry
+                        const failedSKUList = failedSKUs.map(item => item.sku).join('\n');
+                        $('#wbs-bulk-sku-input').val(failedSKUList);
+                    }
+                }
+
+                // Start processing
+                processNextSKU(0);
+            }
+
+            function showBulkStatus(message, type) {
+                const statusDiv = $('#wbs-bulk-status');
+                statusDiv.removeClass('success error loading partial').addClass(type);
+                statusDiv.html(message).show();
+            }
+
+            function clearBulkStatus() {
+                $('#wbs-bulk-status').hide().html('');
+            }
         });
         </script>
         
@@ -657,7 +925,34 @@ class WBS_Admin {
         .wbs-order-total {
             text-align: right;
             margin-top: 15px;
+            font-size: 16px;
+            border-top: 2px solid #ddd;
+            padding-top: 15px;
+        }
+
+        .wbs-order-subtotal,
+        .wbs-order-discount {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .wbs-order-discount {
+            color: #d63638;
+        }
+
+        .wbs-order-total-row {
+            display: flex;
+            justify-content: space-between;
             font-size: 18px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            margin-top: 10px;
+        }
+
+        .wbs-discount-amount {
+            color: #d63638;
         }
         
         .wbs-order-details {
@@ -738,6 +1033,119 @@ class WBS_Admin {
         
         .wbs-customer-email-group {
             position: relative;
+        }
+
+        /* Coupon field styles */
+        .wbs-coupon-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .wbs-coupon-wrapper input {
+            flex: 1;
+        }
+
+        .wbs-coupon-status {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .wbs-coupon-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .wbs-coupon-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .wbs-coupon-status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        /* Bulk SKU Section Styles */
+        .wbs-bulk-section {
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 2px solid #ddd;
+        }
+
+        .wbs-bulk-header h4 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        #wbs-bulk-sku-input {
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            font-family: monospace;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        #wbs-bulk-sku-input:focus {
+            border-color: #2271b1;
+            outline: none;
+            box-shadow: 0 0 0 1px #2271b1;
+        }
+
+        .wbs-bulk-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .wbs-bulk-status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .wbs-bulk-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .wbs-bulk-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .wbs-bulk-status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .wbs-bulk-status.partial {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        .wbs-bulk-status strong {
+            display: block;
+            margin-top: 8px;
+            margin-bottom: 4px;
         }
         </style>
         <?php
