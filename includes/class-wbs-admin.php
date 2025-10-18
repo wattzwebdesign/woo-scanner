@@ -60,6 +60,16 @@ class WBS_Admin {
                     <div class="wbs-content-column">
                         <!-- Scan Section -->
                         <div class="wbs-scan-section">
+                            <div class="wbs-mode-toggle">
+                                <label class="wbs-toggle-label">
+                                    <input type="radio" name="wbs-input-mode" value="scan" checked>
+                                    <span>Scan Mode</span>
+                                </label>
+                                <label class="wbs-toggle-label">
+                                    <input type="radio" name="wbs-input-mode" value="type">
+                                    <span>Type Mode</span>
+                                </label>
+                            </div>
                             <div class="wbs-scan-input-group">
                                 <input type="text" id="wbs-scan-input" placeholder="Scan barcode or enter SKU..." autocomplete="off">
                                 <button type="button" id="wbs-scan-btn" class="button button-primary">Search</button>
@@ -156,6 +166,17 @@ class WBS_Admin {
                         </div>
                     </div>
                 </div>
+
+                <!-- Order Info Column -->
+                <div class="wbs-order-column" id="wbs-order-column">
+                    <div class="wbs-order-column-content" id="wbs-order-column-content">
+                        <div class="wbs-order-column-empty">
+                            <span class="dashicons dashicons-cart"></span>
+                            <p>No order information</p>
+                            <small>Scan an out-of-stock item to view order details</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <?php
@@ -193,6 +214,16 @@ class WBS_Admin {
             <div class="wbs-order-container">
                 <!-- Barcode Scanning Section -->
                 <div class="wbs-scan-section">
+                    <div class="wbs-mode-toggle">
+                        <label class="wbs-toggle-label">
+                            <input type="radio" name="wbs-order-input-mode" value="scan" checked>
+                            <span>Scan Mode</span>
+                        </label>
+                        <label class="wbs-toggle-label">
+                            <input type="radio" name="wbs-order-input-mode" value="type">
+                            <span>Type Mode</span>
+                        </label>
+                    </div>
                     <div class="wbs-scan-input-group">
                         <input type="text" id="wbs-order-scan-input" placeholder="Scan barcode or enter SKU..." autocomplete="off">
                         <button type="button" id="wbs-order-scan-btn" class="button button-primary">Add Item</button>
@@ -310,25 +341,41 @@ class WBS_Admin {
             let orderItems = [];
             let itemCounter = 0;
             let appliedCoupon = null;
-            
+            let orderInputMode = 'scan'; // Default to scan mode
+
             // Auto-focus on scan input
             $('#wbs-order-scan-input').focus();
-            
-            // Handle barcode scanning - auto-add after typing stops
+
+            // Handle mode toggle
+            $('input[name="wbs-order-input-mode"]').on('change', function() {
+                orderInputMode = $(this).val();
+                const scanInput = $('#wbs-order-scan-input');
+
+                if (orderInputMode === 'scan') {
+                    scanInput.attr('placeholder', 'Scan barcode or enter SKU...');
+                } else {
+                    scanInput.attr('placeholder', 'Type SKU and press Enter or click Add Item...');
+                }
+
+                scanInput.focus();
+            });
+
+            // Handle barcode scanning - auto-add after typing stops (only in scan mode)
             let scanTimeout;
             $('#wbs-order-scan-input').on('input', function() {
                 clearTimeout(scanTimeout);
                 const scanInput = $(this);
                 const searchTerm = scanInput.val().trim();
-                
-                if (searchTerm.length >= 3) { // Start searching after 3 characters
+
+                // Only auto-search in scan mode
+                if (orderInputMode === 'scan' && searchTerm.length >= 3) {
                     scanTimeout = setTimeout(function() {
                         addItemToOrder();
                     }, 500); // Wait 500ms after user stops typing
                 }
             });
-            
-            // Also handle Enter key for immediate search
+
+            // Handle Enter key for immediate search (works in both modes)
             $('#wbs-order-scan-input').on('keypress', function(e) {
                 if (e.which === 13) { // Enter key
                     e.preventDefault();
@@ -846,13 +893,44 @@ class WBS_Admin {
         .wbs-order-container {
             max-width: 1200px;
         }
-        
+
         .wbs-scan-section {
             margin-bottom: 30px;
             padding: 20px;
             background: #fff;
             border: 1px solid #ddd;
             border-radius: 5px;
+        }
+
+        .wbs-mode-toggle {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .wbs-toggle-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 500;
+            user-select: none;
+        }
+
+        .wbs-toggle-label input[type="radio"] {
+            margin-right: 6px;
+            cursor: pointer;
+        }
+
+        .wbs-toggle-label span {
+            color: #666;
+        }
+
+        .wbs-toggle-label input[type="radio"]:checked + span {
+            color: #2271b1;
+            font-weight: 600;
         }
         
         .wbs-scan-input-group {

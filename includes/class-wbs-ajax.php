@@ -11,6 +11,7 @@ class WBS_Ajax {
         add_action('wp_ajax_wbs_create_order', array($this, 'create_order'));
         add_action('wp_ajax_wbs_search_customers', array($this, 'search_customers'));
         add_action('wp_ajax_wbs_validate_coupon', array($this, 'validate_coupon'));
+        add_action('wp_ajax_wbs_get_product_order', array($this, 'get_product_order'));
     }
     
     public function search_product() {
@@ -146,34 +147,34 @@ class WBS_Ajax {
     
     private function get_product_data($product) {
         global $wpdb;
-        
+
         $product_id = $product->get_id();
         $categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
-        
+
         // Get consignor information
         $consignor_id = get_post_meta($product_id, '_consignor_id', true);
         $consignor_number = '';
-        
+
         if ($consignor_id) {
             $consignors_table = $wpdb->prefix . 'consignors';
             $consignor = $wpdb->get_row($wpdb->prepare(
                 "SELECT consignor_number FROM $consignors_table WHERE id = %d",
                 $consignor_id
             ));
-            
+
             if ($consignor) {
                 $consignor_number = $consignor->consignor_number;
             }
         }
-        
+
         // Get product image
         $image_id = $product->get_image_id();
         $image_url = '';
-        
+
         if ($image_id) {
             $image_url = wp_get_attachment_image_url($image_id, 'medium');
         }
-        
+
         // Get old_sku custom field
         $old_sku = get_post_meta($product_id, '_old_sku', true);
 
@@ -192,6 +193,75 @@ class WBS_Ajax {
             'consignor_id' => $consignor_id ?: '',
             'consignor_number' => $consignor_number ?: '',
             'image_url' => $image_url ?: ''
+        );
+    }
+
+    private function get_product_order_info($product_id) {
+        global $wpdb;
+
+        // Query order items to find orders containing this product
+        $order_item_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT order_items.order_id
+            FROM {$wpdb->prefix}woocommerce_order_items as order_items
+            LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta as order_item_meta ON order_items.order_item_id = order_item_meta.order_item_id
+            WHERE order_items.order_item_type = 'line_item'
+            AND order_item_meta.meta_key = '_product_id'
+            AND order_item_meta.meta_value = %d
+            ORDER BY order_items.order_id DESC
+            LIMIT 1",
+            $product_id
+        ));
+
+        if (!$order_item_id) {
+            return null;
+        }
+
+        $order = wc_get_order($order_item_id);
+
+        if (!$order) {
+            return null;
+        }
+
+        // Get order items count
+        $item_count = $order->get_item_count();
+
+        // Get order total
+        $order_total = $order->get_total();
+
+        // Get payment method
+        $payment_method = $order->get_payment_method_title() ?: 'N/A';
+
+        // Get customer email
+        $customer_email = $order->get_billing_email();
+
+        // Get customer phone
+        $customer_phone = $order->get_billing_phone();
+
+        // Get shipping address
+        $shipping_address = '';
+        if ($order->has_shipping_address()) {
+            $shipping_parts = array_filter(array(
+                $order->get_shipping_address_1(),
+                $order->get_shipping_city(),
+                $order->get_shipping_state(),
+                $order->get_shipping_postcode()
+            ));
+            $shipping_address = implode(', ', $shipping_parts);
+        }
+
+        return array(
+            'order_id' => $order_item_id,
+            'order_number' => $order->get_order_number(),
+            'order_status' => $order->get_status(),
+            'order_date' => $order->get_date_created()->date('Y-m-d H:i:s'),
+            'order_edit_url' => admin_url('post.php?post=' . $order_item_id . '&action=edit'),
+            'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()) ?: $order->get_billing_email(),
+            'customer_email' => $customer_email,
+            'customer_phone' => $customer_phone ?: 'N/A',
+            'item_count' => $item_count,
+            'order_total' => wc_price($order_total),
+            'payment_method' => $payment_method,
+            'shipping_address' => $shipping_address ?: 'N/A'
         );
     }
     
@@ -375,6 +445,28 @@ class WBS_Ajax {
         );
 
         wp_send_json_success($coupon_data);
+    }
+
+    public function get_product_order() {
+        check_ajax_referer('wbs_nonce', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Unauthorized');
+        }
+
+        $product_id = intval($_POST['product_id']);
+
+        if (!$product_id) {
+            wp_send_json_error('Product ID is required');
+        }
+
+        $order_info = $this->get_product_order_info($product_id);
+
+        if ($order_info) {
+            wp_send_json_success($order_info);
+        } else {
+            wp_send_json_error('No order found for this product');
+        }
     }
 }
 

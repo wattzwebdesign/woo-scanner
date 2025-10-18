@@ -37,8 +37,11 @@
 
 /* Main Layout */
 .wbs-scanner-container {
-    max-width: 1200px;
+    max-width: 100%;
     margin: 0;
+    display: grid;
+    grid-template-columns: 3fr 1fr;
+    gap: 20px;
 }
 
 .wbs-main-layout {
@@ -113,6 +116,39 @@
     margin-bottom: 30px;
     padding-bottom: 20px;
     border-bottom: 1px solid #e9ecef;
+}
+
+/* Mode Toggle */
+.wbs-mode-toggle {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #f5f5f5;
+    border-radius: 6px;
+}
+
+.wbs-toggle-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+    user-select: none;
+}
+
+.wbs-toggle-label input[type="radio"] {
+    margin-right: 6px;
+    cursor: pointer;
+}
+
+.wbs-toggle-label span {
+    color: #666;
+    font-size: 14px;
+}
+
+.wbs-toggle-label input[type="radio"]:checked + span {
+    color: #2271b1;
+    font-weight: 600;
 }
 
 .wbs-scan-input-group {
@@ -427,29 +463,271 @@
     border-left: 4px solid #dc3545;
 }
 
+/* Order Column */
+.wbs-order-column {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    min-height: 500px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.wbs-order-column-content {
+    padding: 30px;
+    height: 100%;
+}
+
+.wbs-order-column-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 400px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.wbs-order-column-empty .dashicons {
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    opacity: 0.3;
+    margin-bottom: 15px;
+}
+
+.wbs-order-column-empty p {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.wbs-order-column-empty small {
+    font-size: 13px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Order Info Loading */
+.wbs-order-info-loading {
+    padding: 40px 20px;
+    background: #f8f9fa;
+    border: 2px dashed #6c757d;
+    border-radius: 8px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    font-size: 14px;
+    margin-top: 20px;
+}
+
+/* Order Info Box */
+.wbs-order-info-box {
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.wbs-order-info-header {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.wbs-order-info-header h4 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: #2271b1;
+}
+
+.wbs-order-info-section {
+    margin-bottom: 30px;
+}
+
+.wbs-section-title {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #495057;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wbs-order-status {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    display: inline-block;
+    text-align: center;
+}
+
+.wbs-order-status-pending {
+    background: #ffc107;
+    color: #856404;
+}
+
+.wbs-order-status-processing {
+    background: #17a2b8;
+    color: #fff;
+}
+
+.wbs-order-status-on-hold {
+    background: #6c757d;
+    color: #fff;
+}
+
+.wbs-order-status-completed {
+    background: #28a745;
+    color: #fff;
+}
+
+.wbs-order-status-cancelled {
+    background: #dc3545;
+    color: #fff;
+}
+
+.wbs-order-status-refunded {
+    background: #fd7e14;
+    color: #fff;
+}
+
+.wbs-order-status-failed {
+    background: #dc3545;
+    color: #fff;
+}
+
+.wbs-order-info-details {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.wbs-order-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #2271b1;
+}
+
+.wbs-order-detail:last-child {
+    border-bottom: none;
+}
+
+.wbs-detail-label {
+    font-weight: 700;
+    color: #6c757d;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wbs-detail-value {
+    font-weight: 600;
+    color: #212529;
+    font-size: 14px;
+    word-break: break-word;
+}
+
+.wbs-detail-value-small {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.wbs-order-info-actions {
+    display: flex;
+    justify-content: stretch;
+    padding-top: 20px;
+    border-top: 2px solid #e9ecef;
+}
+
+.wbs-order-info-actions .button {
+    flex: 1;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 8px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.wbs-order-info-actions .button-primary {
+    background: #2271b1;
+    border-color: #2271b1;
+}
+
+.wbs-order-info-actions .button-primary:hover {
+    background: #1e5a96;
+    border-color: #1e5a96;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(34, 113, 177, 0.3);
+}
+
 /* Responsive Design */
+@media screen and (max-width: 1400px) {
+    .wbs-scanner-container {
+        grid-template-columns: 2fr 1fr;
+    }
+}
+
 @media screen and (max-width: 1024px) {
+    .wbs-scanner-container {
+        grid-template-columns: 1fr;
+    }
+
+    .wbs-order-column {
+        order: -1;
+        min-height: 300px;
+    }
+
     .wbs-main-layout {
         flex-direction: column;
     }
-    
+
     .wbs-image-column,
     .wbs-content-column {
         width: 100%;
     }
-    
+
     .wbs-image-column {
         border-right: none;
         border-bottom: 1px solid #ddd;
         padding: 20px;
         min-height: 180px;
     }
-    
+
     .wbs-product-image-container {
         max-width: 160px;
         margin: 0 auto;
     }
-    
+
     .wbs-row-primary,
     .wbs-row-secondary {
         grid-template-columns: 1fr 1fr;
