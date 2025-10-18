@@ -364,7 +364,7 @@ class WBS_Admin {
                         if (response.success) {
                             const wasAdded = addProductToOrder(response.data);
                             scanInput.val('').focus();
-                            
+
                             if (wasAdded) {
                                 showScanStatus('Product added successfully!', 'success');
                                 setTimeout(() => clearScanStatus(), 2000);
@@ -372,10 +372,12 @@ class WBS_Admin {
                             // If not added (duplicate), the error message is already shown by addProductToOrder
                         } else {
                             showScanStatus('Product not found: ' + searchTerm, 'error');
+                            scanInput.val('').focus(); // Clear input even when product not found
                         }
                     },
                     error: function() {
                         showScanStatus('Error searching for product', 'error');
+                        scanInput.val('').focus(); // Clear input on error
                     }
                 });
             }
@@ -397,8 +399,8 @@ class WBS_Admin {
                         quantity: 1,
                         image_url: product.image_url
                     };
-                    
-                    orderItems.push(item);
+
+                    orderItems.unshift(item); // Add to beginning of array so newest items appear at top
                     updateOrderDisplay();
                     return true; // Return true to indicate item was added successfully
                 }

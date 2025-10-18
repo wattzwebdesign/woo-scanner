@@ -116,12 +116,31 @@ class WBS_Ajax {
     }
     
     private function find_product_by_sku($search_term) {
+        // First try to find by regular SKU
         $product_id = wc_get_product_id_by_sku($search_term);
-        
+
         if ($product_id) {
             return wc_get_product($product_id);
         }
-        
+
+        // If not found, try to find by old_sku custom field
+        global $wpdb;
+
+        $product_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta}
+            WHERE meta_key = '_old_sku'
+            AND meta_value = %s
+            LIMIT 1",
+            $search_term
+        ));
+
+        if ($product_id) {
+            $product = wc_get_product($product_id);
+            if ($product) {
+                return $product;
+            }
+        }
+
         return false;
     }
     
@@ -155,10 +174,14 @@ class WBS_Ajax {
             $image_url = wp_get_attachment_image_url($image_id, 'medium');
         }
         
+        // Get old_sku custom field
+        $old_sku = get_post_meta($product_id, '_old_sku', true);
+
         return array(
             'id' => $product_id,
             'title' => $product->get_name() ?: '',
             'sku' => $product->get_sku() ?: '',
+            'old_sku' => $old_sku ?: '',
             'regular_price' => $product->get_regular_price() ?: '',
             'sale_price' => $product->get_sale_price() ?: '',
             'stock_status' => $product->get_stock_status() ?: 'instock',
