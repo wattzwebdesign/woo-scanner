@@ -12,6 +12,7 @@ class WBS_Ajax {
         add_action('wp_ajax_wbs_search_customers', array($this, 'search_customers'));
         add_action('wp_ajax_wbs_validate_coupon', array($this, 'validate_coupon'));
         add_action('wp_ajax_wbs_get_product_order', array($this, 'get_product_order'));
+        add_action('wp_ajax_wbs_update_verification', array($this, 'update_verification'));
     }
     
     public function search_product() {
@@ -178,6 +179,12 @@ class WBS_Ajax {
         // Get old_sku custom field
         $old_sku = get_post_meta($product_id, '_old_sku', true);
 
+        // Get verification status
+        $verified = get_post_meta($product_id, '_verified', true);
+        if (empty($verified)) {
+            $verified = 'not-on-the-floor'; // Default value
+        }
+
         return array(
             'id' => $product_id,
             'title' => $product->get_name() ?: '',
@@ -192,7 +199,8 @@ class WBS_Ajax {
             'status' => get_post_status($product_id) ?: 'publish',
             'consignor_id' => $consignor_id ?: '',
             'consignor_number' => $consignor_number ?: '',
-            'image_url' => $image_url ?: ''
+            'image_url' => $image_url ?: '',
+            'verified' => $verified
         );
     }
 
@@ -466,6 +474,44 @@ class WBS_Ajax {
             wp_send_json_success($order_info);
         } else {
             wp_send_json_error('No order found for this product');
+        }
+    }
+
+    public function update_verification() {
+        check_ajax_referer('wbs_nonce', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Unauthorized');
+        }
+
+        $product_id = intval($_POST['product_id']);
+
+        if (!$product_id) {
+            wp_send_json_error('Product ID is required');
+        }
+
+        $product = wc_get_product($product_id);
+
+        if (!$product) {
+            wp_send_json_error('Product not found');
+        }
+
+        // Only allow verification updates for in-stock products
+        if ($product->get_stock_status() !== 'instock') {
+            wp_send_json_error('Can only verify products that are in stock');
+        }
+
+        try {
+            // Update verification status to "on-the-floor"
+            update_post_meta($product_id, '_verified', 'on-the-floor');
+
+            wp_send_json_success(array(
+                'message' => 'Product marked as On the Floor',
+                'verified' => 'on-the-floor'
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error('Error updating verification: ' . $e->getMessage());
         }
     }
 }

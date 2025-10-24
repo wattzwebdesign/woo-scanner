@@ -7,6 +7,15 @@ class WBS_Admin {
     
     public function __construct() {
         add_action('admin_menu', array($this, 'add_admin_menu'));
+
+        // Add verification column to products list
+        add_filter('manage_edit-product_columns', array($this, 'add_verification_column'));
+        add_action('manage_product_posts_custom_column', array($this, 'display_verification_column'), 10, 2);
+        add_filter('manage_edit-product_sortable_columns', array($this, 'make_verification_column_sortable'));
+
+        // Add verification filter
+        add_action('restrict_manage_posts', array($this, 'add_verification_filter'));
+        add_filter('parse_query', array($this, 'filter_by_verification_status'));
     }
     
     public function add_admin_menu() {
@@ -27,6 +36,15 @@ class WBS_Admin {
             'manage_woocommerce',
             'wbs-create-order',
             array($this, 'create_order_page')
+        );
+
+        add_submenu_page(
+            'woo-barcode-scanner',
+            'Verification',
+            'Verification',
+            'manage_woocommerce',
+            'wbs-verification',
+            array($this, 'verification_page')
         );
     }
     
@@ -1229,6 +1247,217 @@ class WBS_Admin {
         }
         </style>
         <?php
+    }
+
+    public function verification_page() {
+        ?>
+        <div class="wrap" id="wbs-verification-wrap">
+            <div class="wbs-header-controls">
+                <h1>Product Verification</h1>
+                <div class="wbs-header-buttons">
+                    <button type="button" id="wbs-fullscreen-toggle" class="button">
+                        <span class="dashicons dashicons-fullscreen-alt"></span>
+                        Full Screen
+                    </button>
+                </div>
+            </div>
+
+            <div class="wbs-scanner-container" id="wbs-verification-container">
+                <div class="wbs-main-layout">
+                    <!-- Left Column - Product Image -->
+                    <div class="wbs-image-column">
+                        <div class="wbs-product-image-container">
+                            <img id="wbs-product-image" src="" alt="Product Image" style="display: none;">
+                            <div class="wbs-no-image" id="wbs-no-image">
+                                <span class="dashicons dashicons-format-image"></span>
+                                <p>No Image</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Product Information -->
+                    <div class="wbs-content-column">
+                        <!-- Scan Section -->
+                        <div class="wbs-scan-section">
+                            <div class="wbs-mode-toggle">
+                                <label class="wbs-toggle-label">
+                                    <input type="radio" name="wbs-input-mode" value="scan" checked>
+                                    <span>Scan Mode</span>
+                                </label>
+                                <label class="wbs-toggle-label">
+                                    <input type="radio" name="wbs-input-mode" value="type">
+                                    <span>Type Mode</span>
+                                </label>
+                            </div>
+                            <div class="wbs-scan-input-group">
+                                <input type="text" id="wbs-scan-input" placeholder="Scan barcode or enter SKU..." autocomplete="off">
+                                <button type="button" id="wbs-scan-btn" class="button button-primary">Search</button>
+                            </div>
+                            <div id="wbs-scan-result" class="wbs-found-result"></div>
+                        </div>
+
+                        <!-- Product Verification Display -->
+                        <div id="wbs-product-verification" class="wbs-product-verification" style="display: none;">
+                            <input type="hidden" id="wbs-product-id" name="product_id">
+
+                            <!-- Product Title & ID -->
+                            <div class="wbs-product-header">
+                                <div class="wbs-product-title-section">
+                                    <div class="wbs-product-id">#<span id="wbs-product-id-display"></span></div>
+                                    <div class="wbs-product-title-display">
+                                        <h3 id="wbs-product-title"></h3>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Product Details Row -->
+                            <div class="wbs-verification-details">
+                                <div class="wbs-detail-item">
+                                    <label>SKU</label>
+                                    <span id="wbs-sku" class="wbs-detail-value"></span>
+                                </div>
+
+                                <div class="wbs-detail-item">
+                                    <label>Price</label>
+                                    <span id="wbs-price" class="wbs-detail-value"></span>
+                                </div>
+
+                                <div class="wbs-detail-item">
+                                    <label>Stock Status</label>
+                                    <div class="wbs-stock-status-display">
+                                        <span id="wbs-stock-status" class="wbs-detail-value"></span>
+                                        <div class="wbs-stock-indicator" id="wbs-stock-indicator"></div>
+                                    </div>
+                                </div>
+
+                                <div class="wbs-detail-item">
+                                    <label>Quantity</label>
+                                    <span id="wbs-quantity" class="wbs-detail-value"></span>
+                                </div>
+                            </div>
+
+                            <!-- Verification Status Section -->
+                            <div class="wbs-verification-status-section">
+                                <div class="wbs-verification-status-box">
+                                    <h4>Verification Status</h4>
+                                    <div class="wbs-verification-indicator" id="wbs-verification-indicator">
+                                        <span class="wbs-verification-icon"></span>
+                                        <span class="wbs-verification-text"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="wbs-verification-actions">
+                                <button type="button" id="wbs-mark-verified" class="button button-primary" style="display: none;">
+                                    Mark as On the Floor
+                                </button>
+                                <button type="button" id="wbs-clear-form" class="button">Clear & New Search</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Order Info Column -->
+                <div class="wbs-order-column" id="wbs-order-column">
+                    <div class="wbs-order-column-content" id="wbs-order-column-content">
+                        <div class="wbs-order-column-empty">
+                            <span class="dashicons dashicons-cart"></span>
+                            <p>No order information</p>
+                            <small>Scan an out-of-stock item to view order details</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    // Add verification column to products list
+    public function add_verification_column($columns) {
+        // Insert verification column after the product name
+        $new_columns = array();
+        foreach ($columns as $key => $value) {
+            $new_columns[$key] = $value;
+            if ($key === 'name') {
+                $new_columns['verification_status'] = 'Verification';
+            }
+        }
+        return $new_columns;
+    }
+
+    // Display verification status in the column
+    public function display_verification_column($column, $post_id) {
+        if ($column === 'verification_status') {
+            $verified = get_post_meta($post_id, '_verified', true);
+
+            if (empty($verified)) {
+                $verified = 'not-on-the-floor'; // Default
+            }
+
+            if ($verified === 'on-the-floor') {
+                echo '<span style="display: inline-block; padding: 4px 10px; background: #d4edda; color: #155724; border-radius: 3px; font-size: 11px; font-weight: 600;">✓ On the Floor</span>';
+            } else {
+                echo '<span style="display: inline-block; padding: 4px 10px; background: #f8d7da; color: #721c24; border-radius: 3px; font-size: 11px; font-weight: 600;">✗ Not on the Floor</span>';
+            }
+        }
+    }
+
+    // Make verification column sortable
+    public function make_verification_column_sortable($columns) {
+        $columns['verification_status'] = 'verification_status';
+        return $columns;
+    }
+
+    // Add verification filter dropdown
+    public function add_verification_filter($post_type) {
+        if ($post_type !== 'product') {
+            return;
+        }
+
+        $current_filter = isset($_GET['verification_status']) ? sanitize_text_field($_GET['verification_status']) : '';
+
+        ?>
+        <select name="verification_status" id="verification_status_filter">
+            <option value="">All Verification Statuses</option>
+            <option value="on-the-floor" <?php selected($current_filter, 'on-the-floor'); ?>>On the Floor</option>
+            <option value="not-on-the-floor" <?php selected($current_filter, 'not-on-the-floor'); ?>>Not on the Floor</option>
+        </select>
+        <?php
+    }
+
+    // Filter products by verification status
+    public function filter_by_verification_status($query) {
+        global $pagenow, $typenow;
+
+        if ($typenow === 'product' && $pagenow === 'edit.php' && isset($_GET['verification_status']) && !empty($_GET['verification_status'])) {
+            $verification_status = sanitize_text_field($_GET['verification_status']);
+
+            $meta_query = array(
+                'relation' => 'OR',
+                array(
+                    'key' => '_verified',
+                    'value' => $verification_status,
+                    'compare' => '='
+                )
+            );
+
+            // If filtering for "not-on-the-floor", also include products without the meta field
+            if ($verification_status === 'not-on-the-floor') {
+                $meta_query[] = array(
+                    'key' => '_verified',
+                    'compare' => 'NOT EXISTS'
+                );
+            }
+
+            $query->set('meta_query', $meta_query);
+        }
+
+        // Handle sorting by verification status
+        if (isset($_GET['orderby']) && $_GET['orderby'] === 'verification_status') {
+            $query->set('meta_key', '_verified');
+            $query->set('orderby', 'meta_value');
+        }
     }
 }
 

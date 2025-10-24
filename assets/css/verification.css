@@ -1,0 +1,232 @@
+/* Verification Page Styles */
+
+#wbs-verification-wrap {
+    max-width: 100%;
+}
+
+#wbs-verification-container {
+    margin-top: 20px;
+}
+
+.wbs-product-verification {
+    background: #fff;
+    padding: 25px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+
+.wbs-product-title-display h3 {
+    margin: 0;
+    font-size: 20px;
+    color: #333;
+    font-weight: 600;
+}
+
+/* Verification Details Grid */
+.wbs-verification-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 25px 0;
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 5px;
+}
+
+.wbs-detail-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.wbs-detail-item label {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #666;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+
+.wbs-detail-value {
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+}
+
+.wbs-stock-status-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Stock Status Indicators */
+.wbs-stock-indicator {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wbs-stock-indicator.wbs-in-stock {
+    background: #d4edda;
+    color: #155724;
+}
+
+.wbs-stock-indicator.wbs-out-of-stock {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.wbs-stock-indicator.wbs-backorder {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Verification Status Section */
+.wbs-verification-status-section {
+    margin: 30px 0;
+}
+
+.wbs-verification-status-box {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    padding: 25px;
+    text-align: center;
+}
+
+.wbs-verification-status-box h4 {
+    margin: 0 0 20px 0;
+    font-size: 16px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+.wbs-verification-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px 40px;
+    border-radius: 8px;
+    font-size: 24px;
+    font-weight: 700;
+    transition: all 0.3s ease;
+}
+
+.wbs-verification-indicator.wbs-verified {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.wbs-verification-indicator.wbs-not-verified {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    box-shadow: 0 8px 20px rgba(245, 87, 108, 0.4);
+}
+
+.wbs-verification-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.wbs-verification-text {
+    font-size: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* Verification Actions */
+.wbs-verification-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 25px;
+}
+
+.wbs-verification-actions .button {
+    padding: 12px 30px;
+    font-size: 16px;
+    height: auto;
+}
+
+#wbs-mark-verified {
+    background: #4caf50;
+    border-color: #45a049;
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    transition: all 0.3s ease;
+}
+
+#wbs-mark-verified:hover {
+    background: #45a049;
+    border-color: #3d8b40;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+#wbs-mark-verified:active {
+    transform: translateY(0);
+}
+
+#wbs-mark-verified:disabled {
+    background: #ccc;
+    border-color: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .wbs-verification-details {
+        grid-template-columns: 1fr;
+    }
+
+    .wbs-verification-indicator {
+        padding: 15px 25px;
+        font-size: 18px;
+    }
+
+    .wbs-verification-icon {
+        font-size: 24px;
+    }
+
+    .wbs-verification-text {
+        font-size: 16px;
+    }
+
+    .wbs-verification-actions {
+        flex-direction: column;
+    }
+
+    .wbs-verification-actions .button {
+        width: 100%;
+    }
+}
+
+/* Animation for status changes */
+@keyframes statusPulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.wbs-verification-indicator.wbs-verified {
+    animation: statusPulse 0.5s ease;
+}

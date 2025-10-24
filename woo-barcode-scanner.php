@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Barcode Scanner
  * Plugin URI: https://codewattz.com
  * Description: Scan barcodes to quickly find and edit WooCommerce products
- * Version: 1.0.4
+ * Version: 1.1.0
  * Author: Code Wattz
  * License: GPL v2 or later
  * Requires at least: 5.0
@@ -56,7 +56,7 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         private function define_constants() {
             define('WBS_PLUGIN_URL', plugin_dir_url(__FILE__));
             define('WBS_PLUGIN_PATH', plugin_dir_path(__FILE__));
-            define('WBS_VERSION', '1.0.4');
+            define('WBS_VERSION', '1.1.1');
         }
         
         private function includes() {
@@ -89,21 +89,30 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         }
         
         public function admin_enqueue_scripts($hook) {
-            // Debug: Log the hook to see what page we're on
-            error_log('WBS Debug: Hook is: ' . $hook);
-            
-            if ('toplevel_page_woo-barcode-scanner' !== $hook && 'barcode-scanner_page_wbs-create-order' !== $hook) {
+            if ('toplevel_page_woo-barcode-scanner' !== $hook && 'barcode-scanner_page_wbs-create-order' !== $hook && 'barcode-scanner_page_wbs-verification' !== $hook) {
                 return;
             }
-            
-            error_log('WBS Debug: Enqueuing script at: ' . WBS_PLUGIN_URL . 'assets/js/admin.js');
-            wp_enqueue_script('wbs-admin', WBS_PLUGIN_URL . 'assets/js/admin.js', array('jquery'), WBS_VERSION, true);
-            wp_enqueue_style('wbs-admin', WBS_PLUGIN_URL . 'assets/css/admin.css', array(), WBS_VERSION);
-            
-            wp_localize_script('wbs-admin', 'wbs_ajax', array(
-                'ajax_url' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('wbs_nonce')
-            ));
+
+            // Enqueue verification-specific scripts for verification page
+            if ('barcode-scanner_page_wbs-verification' === $hook) {
+                wp_enqueue_style('wbs-admin', WBS_PLUGIN_URL . 'assets/css/admin.css', array(), WBS_VERSION);
+                wp_enqueue_style('wbs-verification', WBS_PLUGIN_URL . 'assets/css/verification.css', array(), WBS_VERSION);
+                wp_enqueue_script('wbs-verification', WBS_PLUGIN_URL . 'assets/js/verification.js', array('jquery'), WBS_VERSION, true);
+
+                wp_localize_script('wbs-verification', 'wbs_ajax', array(
+                    'ajax_url' => admin_url('admin-ajax.php'),
+                    'nonce' => wp_create_nonce('wbs_nonce')
+                ));
+            } else {
+                // Enqueue standard admin scripts for other pages
+                wp_enqueue_style('wbs-admin', WBS_PLUGIN_URL . 'assets/css/admin.css', array(), WBS_VERSION);
+                wp_enqueue_script('wbs-admin', WBS_PLUGIN_URL . 'assets/js/admin.js', array('jquery'), WBS_VERSION, true);
+
+                wp_localize_script('wbs-admin', 'wbs_ajax', array(
+                    'ajax_url' => admin_url('admin-ajax.php'),
+                    'nonce' => wp_create_nonce('wbs_nonce')
+                ));
+            }
         }
         
         public function add_rewrite_rules() {
