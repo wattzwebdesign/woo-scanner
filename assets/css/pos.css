@@ -301,6 +301,29 @@ body.wbs-pos-page .wrap {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    position: relative;
+}
+
+.wbs-pos-discount-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-top: 4px;
+    white-space: nowrap;
+}
+
+.wbs-pos-discount-badge.active {
+    background: #85D0D7;
+    color: white;
+}
+
+.wbs-pos-discount-badge.not-eligible {
+    background: #e9ecef;
+    color: #6c757d;
 }
 
 .wbs-pos-item-title {

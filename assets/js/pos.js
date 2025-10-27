@@ -116,6 +116,7 @@ jQuery(document).ready(function($) {
                 price: parseFloat(product.sale_price || product.regular_price || 0),
                 quantity: 1,
                 image_url: product.image_url,
+                category_ids: product.category_ids || [],
                 is_custom: false
             };
 
@@ -152,6 +153,17 @@ jQuery(document).ready(function($) {
                     imageHtml = '<span style="font-size: 40px;">📦</span>';
                 }
 
+                // Check discount eligibility
+                let discountBadge = '';
+                if (appliedCoupon && !item.is_custom) {
+                    const isEligible = isItemEligibleForCoupon(item, appliedCoupon);
+                    if (isEligible) {
+                        discountBadge = '<span class="wbs-pos-discount-badge active">Discount Applied</span>';
+                    } else {
+                        discountBadge = '<span class="wbs-pos-discount-badge not-eligible">Discount Not Applied</span>';
+                    }
+                }
+
                 cartItemsContainer.append(`
                     <div class="wbs-pos-cart-item ${customClass}" data-item-id="${item.id}">
                         <div class="wbs-pos-item-image">${imageHtml}</div>
@@ -159,6 +171,7 @@ jQuery(document).ready(function($) {
                             <div class="wbs-pos-item-title">${item.name}</div>
                             <div class="wbs-pos-item-sku">SKU: ${item.sku}</div>
                             <div class="wbs-pos-item-price">$${item.price.toFixed(2)}</div>
+                            ${discountBadge}
                         </div>
                         <div class="wbs-pos-item-qty">
                             <div class="wbs-pos-qty-display">Qty: ${item.quantity}</div>
@@ -174,6 +187,50 @@ jQuery(document).ready(function($) {
         updateCartHeader();
     }
 
+    function isItemEligibleForCoupon(item, coupon) {
+        // Custom items are never eligible for coupons
+        if (item.is_custom) {
+            return false;
+        }
+
+        const productId = item.product_id;
+        const categoryIds = item.category_ids || [];
+
+        // Check if product is explicitly excluded
+        if (coupon.excluded_product_ids && coupon.excluded_product_ids.length > 0) {
+            if (coupon.excluded_product_ids.includes(productId)) {
+                return false;
+            }
+        }
+
+        // Check if product category is explicitly excluded
+        if (coupon.excluded_product_categories && coupon.excluded_product_categories.length > 0) {
+            for (let catId of categoryIds) {
+                if (coupon.excluded_product_categories.includes(catId)) {
+                    return false;
+                }
+            }
+        }
+
+        // If coupon has specific product IDs, check if this product is included
+        if (coupon.product_ids && coupon.product_ids.length > 0) {
+            return coupon.product_ids.includes(productId);
+        }
+
+        // If coupon has specific categories, check if this product is in one of them
+        if (coupon.product_categories && coupon.product_categories.length > 0) {
+            for (let catId of categoryIds) {
+                if (coupon.product_categories.includes(catId)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // If no restrictions, coupon applies to all products
+        return true;
+    }
+
     function updateCartHeader() {
         const count = cartItems.length;
         $('#wbs-pos-cart-count').text(count);
@@ -186,7 +243,15 @@ jQuery(document).ready(function($) {
 
         // Apply coupon discount if available
         if (appliedCoupon) {
-            discount = calculateDiscount(subtotal, appliedCoupon);
+            // Calculate eligible items subtotal
+            const eligibleSubtotal = cartItems.reduce((sum, item) => {
+                if (isItemEligibleForCoupon(item, appliedCoupon)) {
+                    return sum + (item.price * item.quantity);
+                }
+                return sum;
+            }, 0);
+
+            discount = calculateDiscount(eligibleSubtotal, appliedCoupon);
             total = subtotal - discount;
 
             $('.wbs-pos-total-row.discount').show();
@@ -200,17 +265,17 @@ jQuery(document).ready(function($) {
         $('#wbs-pos-total').text(total.toFixed(2));
     }
 
-    function calculateDiscount(subtotal, coupon) {
+    function calculateDiscount(eligibleSubtotal, coupon) {
         let discount = 0;
 
         if (coupon.discount_type === 'percent') {
-            discount = (subtotal * parseFloat(coupon.amount)) / 100;
+            discount = (eligibleSubtotal * parseFloat(coupon.amount)) / 100;
         } else if (coupon.discount_type === 'fixed_cart') {
             discount = parseFloat(coupon.amount);
         }
 
-        // Don't let discount exceed subtotal
-        discount = Math.min(discount, subtotal);
+        // Don't let discount exceed eligible subtotal
+        discount = Math.min(discount, eligibleSubtotal);
 
         return discount;
     }

@@ -196,6 +196,7 @@ class WBS_Ajax {
             'stock_quantity' => $product->get_stock_quantity() ?: 0,
             'manage_stock' => $product->get_manage_stock() ?: false,
             'categories' => $categories ?: array(),
+            'category_ids' => $categories ?: array(),
             'status' => get_post_status($product_id) ?: 'publish',
             'consignor_id' => $consignor_id ?: '',
             'consignor_number' => $consignor_number ?: '',
@@ -456,12 +457,22 @@ class WBS_Ajax {
             wp_send_json_error($error_message);
         }
 
+        // Get coupon restrictions
+        $product_ids = $coupon->get_product_ids();
+        $product_categories = $coupon->get_product_categories();
+        $excluded_product_ids = $coupon->get_excluded_product_ids();
+        $excluded_product_categories = $coupon->get_excluded_product_categories();
+
         // Return coupon data
         $coupon_data = array(
             'code' => $coupon->get_code(),
             'discount_type' => $coupon->get_discount_type(),
             'amount' => $coupon->get_amount(),
-            'description' => $coupon->get_description()
+            'description' => $coupon->get_description(),
+            'product_ids' => $product_ids,
+            'product_categories' => $product_categories,
+            'excluded_product_ids' => $excluded_product_ids,
+            'excluded_product_categories' => $excluded_product_categories
         );
 
         wp_send_json_success($coupon_data);
