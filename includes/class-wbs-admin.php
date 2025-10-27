@@ -16,6 +16,44 @@ class WBS_Admin {
         // Add verification filter
         add_action('restrict_manage_posts', array($this, 'add_verification_filter'));
         add_filter('parse_query', array($this, 'filter_by_verification_status'));
+
+        // Add admin notice for POS link
+        add_action('admin_notices', array($this, 'pos_link_notice'));
+    }
+
+    public function pos_link_notice() {
+        // Only show on plugin pages
+        $screen = get_current_screen();
+        if (!$screen || strpos($screen->id, 'barcode-scanner') === false) {
+            return;
+        }
+
+        // Show dismissible notice with POS link
+        $dismissed = get_user_meta(get_current_user_id(), 'wbs_pos_notice_dismissed', true);
+        if ($dismissed) {
+            return;
+        }
+
+        ?>
+        <div class="notice notice-info is-dismissible" id="wbs-pos-notice">
+            <p>
+                <strong>💡 Tip:</strong> Access the fullscreen POS system at
+                <a href="<?php echo esc_url(home_url('/pos')); ?>" target="_blank"><strong><?php echo esc_url(home_url('/pos')); ?></strong></a>
+                <br>
+                <small>This standalone page works great on iPads and tablets with no WordPress admin interface.</small>
+            </p>
+        </div>
+        <script>
+        jQuery(document).ready(function($) {
+            $('#wbs-pos-notice').on('click', '.notice-dismiss', function() {
+                $.post(ajaxurl, {
+                    action: 'wbs_dismiss_pos_notice',
+                    nonce: '<?php echo wp_create_nonce('wbs_dismiss_notice'); ?>'
+                });
+            });
+        });
+        </script>
+        <?php
     }
     
     public function add_admin_menu() {
@@ -47,13 +85,14 @@ class WBS_Admin {
             array($this, 'verification_page')
         );
 
+        // Frontend POS link
         add_submenu_page(
             'woo-barcode-scanner',
             'Point of Sale',
-            'Point of Sale',
+            'Point of Sale →',
             'manage_woocommerce',
-            'wbs-pos',
-            array($this, 'pos_page')
+            'wbs-pos-frontend',
+            array($this, 'pos_frontend_redirect')
         );
     }
     
@@ -457,27 +496,40 @@ class WBS_Admin {
             }
             
             function addProductToOrder(product) {
-                // Check if product already exists
-                let existingItem = orderItems.find(item => item.product_id === product.id);
-                
-                if (existingItem) {
-                    showScanStatus('Product already in this order: ' + product.title, 'error');
-                    return false; // Return false to indicate item was not added
-                } else {
-                    const item = {
-                        id: ++itemCounter,
-                        product_id: product.id,
-                        sku: product.sku,
-                        name: product.title,
-                        price: parseFloat(product.sale_price || product.regular_price || 0),
-                        quantity: 1,
-                        image_url: product.image_url
-                    };
+                console.log('=== Adding product to order ===');
+                console.log('Incoming product:', product);
+                console.log('Current order has', orderItems.length, 'items');
 
-                    orderItems.unshift(item); // Add to beginning of array so newest items appear at top
-                    updateOrderDisplay();
-                    return true; // Return true to indicate item was added successfully
+                // SIMPLE CHECK: Does this product_id already exist in the order?
+                // Convert to string for comparison to handle any type issues
+                const newProductId = String(product.id);
+
+                for (let i = 0; i < orderItems.length; i++) {
+                    const existingProductId = String(orderItems[i].product_id);
+                    console.log(`Checking order item ${i}: ${existingProductId} vs ${newProductId}`);
+
+                    if (existingProductId === newProductId) {
+                        console.log('DUPLICATE DETECTED! Product already in order.');
+                        showScanStatus('Product already in this order: ' + product.title, 'error');
+                        return false;
+                    }
                 }
+
+                console.log('No duplicate found, adding to order');
+
+                const item = {
+                    id: ++itemCounter,
+                    product_id: product.id,
+                    sku: product.sku,
+                    name: product.title,
+                    price: parseFloat(product.sale_price || product.regular_price || 0),
+                    quantity: 1,
+                    image_url: product.image_url
+                };
+
+                orderItems.unshift(item); // Add to beginning of array so newest items appear at top
+                updateOrderDisplay();
+                return true;
             }
             
             function updateOrderDisplay() {
@@ -1496,6 +1548,11 @@ class WBS_Admin {
         }
     }
 
+    public function pos_frontend_redirect() {
+        wp_redirect(home_url('/pos/'));
+        exit;
+    }
+
     public function pos_page() {
         $site_logo = get_site_icon_url(50);
         if (!$site_logo) {
@@ -1521,11 +1578,10 @@ class WBS_Admin {
                         </div>
                         <div class="wbs-pos-scan-input-group">
                             <input type="text" id="wbs-pos-scan-input" placeholder="Scan product/order" autocomplete="off">
-                            <button type="button" id="wbs-pos-search-btn">search fields</button>
+                            <button type="button" id="wbs-pos-search-btn">Search</button>
                         </div>
                     </div>
                 </div>
-                <button type="button" id="wbs-pos-fullscreen-toggle" class="wbs-pos-fullscreen-btn">⛶ Full Screen</button>
             </div>
 
             <div class="wbs-pos-container">

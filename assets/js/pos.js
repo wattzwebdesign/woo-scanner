@@ -13,6 +13,93 @@ jQuery(document).ready(function($) {
     // Auto-focus on scan input
     $('#wbs-pos-scan-input').focus();
 
+    // iOS Chrome keyboard bar workaround
+    // When using barcode scanner, prevent keyboard from showing
+    const scanInput = document.getElementById('wbs-pos-scan-input');
+    if (scanInput) {
+        // Detect if using barcode scanner (rapid input) vs manual typing
+        let inputSpeed = 0;
+        let lastInputTime = 0;
+
+        scanInput.addEventListener('beforeinput', function(e) {
+            const now = Date.now();
+            inputSpeed = now - lastInputTime;
+            lastInputTime = now;
+
+            // If input is very fast (< 50ms between chars), it's likely a barcode scanner
+            if (inputSpeed < 50 && inputSpeed > 0) {
+                // Keep inputmode="none" to prevent keyboard
+                scanInput.setAttribute('inputmode', 'none');
+            }
+        });
+
+        // When user manually focuses (tap/click), allow keyboard for manual entry
+        scanInput.addEventListener('click', function() {
+            if (inputMode === 'type') {
+                scanInput.setAttribute('inputmode', 'text');
+            }
+        });
+    }
+
+    // ========================================
+    // PREVENT ACCIDENTAL REFRESH/NAVIGATION
+    // ========================================
+    let allowNavigation = false;
+
+    // Intercept keyboard shortcuts for refresh
+    $(document).on('keydown', function(e) {
+        // Check for F5 or Ctrl+R (Windows/Linux) or Cmd+R (Mac)
+        if ((e.key === 'F5') ||
+            ((e.ctrlKey || e.metaKey) && e.key === 'r')) {
+
+            if (cartItems.length > 0 && !allowNavigation) {
+                e.preventDefault();
+                showRefreshWarningModal();
+            }
+        }
+    });
+
+    // Use beforeunload as a fallback for other navigation attempts
+    window.addEventListener('beforeunload', function(e) {
+        if (cartItems.length > 0 && !allowNavigation) {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        }
+    });
+
+    function showRefreshWarningModal() {
+        const modalHtml = `
+            <div id="wbs-pos-refresh-modal" class="wbs-pos-modal">
+                <div class="wbs-pos-modal-content">
+                    <h3>⚠️ Warning</h3>
+                    <p>You have ${cartItems.length} item(s) in your cart. Refreshing will clear all items.</p>
+                    <p style="font-weight: 600; margin-top: 15px;">Are you sure you want to refresh?</p>
+                    <div class="wbs-pos-modal-buttons">
+                        <button type="button" id="wbs-pos-refresh-confirm" class="wbs-pos-modal-btn wbs-pos-modal-btn-primary">Yes, Refresh</button>
+                        <button type="button" id="wbs-pos-refresh-cancel" class="wbs-pos-modal-btn wbs-pos-modal-btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('body').append(modalHtml);
+
+        // Confirm button - allow refresh
+        $('#wbs-pos-refresh-confirm').on('click', function() {
+            allowNavigation = true;
+            location.reload();
+        });
+
+        // Cancel button
+        $('#wbs-pos-refresh-cancel').on('click', function() {
+            $('#wbs-pos-refresh-modal').remove();
+        });
+
+        // Focus cancel button by default
+        $('#wbs-pos-refresh-cancel').focus();
+    }
+
     // ========================================
     // MODE TOGGLE
     // ========================================
@@ -22,8 +109,10 @@ jQuery(document).ready(function($) {
 
         if (inputMode === 'scan') {
             scanInput.attr('placeholder', 'Scan product/order');
+            scanInput.attr('inputmode', 'none'); // No keyboard for scanning
         } else {
             scanInput.attr('placeholder', 'Type SKU and press Enter');
+            scanInput.attr('inputmode', 'text'); // Allow keyboard for typing
         }
 
         scanInput.focus();
@@ -82,12 +171,12 @@ jQuery(document).ready(function($) {
                     addProductToCart(response.data);
                     scanInput.val('').focus();
                 } else {
-                    alert('Product not found: ' + searchTerm);
+                    showNotification('Product not found: ' + searchTerm, 'error');
                     scanInput.val('').focus();
                 }
             },
             error: function() {
-                alert('Error searching for product');
+                showNotification('Error searching for product', 'error');
                 scanInput.val('').focus();
             }
         });
@@ -97,37 +186,45 @@ jQuery(document).ready(function($) {
     // CART MANAGEMENT
     // ========================================
     function addProductToCart(product) {
-        // Check if product already exists
-        let existingItem = cartItems.find(item => item.product_id === product.id);
+        // Check if product already exists in the cart
+        // Convert to string for comparison to handle any type issues
+        const newProductId = String(product.id);
 
-        if (existingItem) {
-            // Increase quantity
-            existingItem.quantity += 1;
-            // Move existing item to top
-            cartItems = cartItems.filter(item => item.product_id !== product.id);
-            cartItems.unshift(existingItem);
-        } else {
-            // Add new item to the top
-            const item = {
-                id: ++itemCounter,
-                product_id: product.id,
-                sku: product.sku,
-                name: product.title,
-                price: parseFloat(product.sale_price || product.regular_price || 0),
-                quantity: 1,
-                image_url: product.image_url,
-                category_ids: product.category_ids || [],
-                is_custom: false
-            };
+        for (let i = 0; i < cartItems.length; i++) {
+            const existingProductId = String(cartItems[i].product_id);
 
-            cartItems.unshift(item);
+            if (existingProductId === newProductId) {
+                const displaySku = product.sku || product.old_sku || product.title || 'Unknown';
+                showNotification('Item already in cart: ' + displaySku, 'error');
+                return false;
+            }
         }
 
+        // Add new item to the top
+        const item = {
+            id: ++itemCounter,
+            product_id: product.id,
+            sku: product.sku,
+            old_sku: product.old_sku || '',
+            name: product.title,
+            price: parseFloat(product.sale_price || product.regular_price || 0),
+            quantity: 1,
+            image_url: product.image_url,
+            category_ids: product.category_ids || [],
+            is_custom: false
+        };
+
+        cartItems.unshift(item);
         updateCartDisplay();
+        return true;
     }
 
     function updateCartDisplay() {
         const cartItemsContainer = $('#wbs-pos-cart-items');
+
+        // Store scroll position
+        const wasAtTop = cartItemsContainer.scrollTop() === 0;
+
         cartItemsContainer.empty();
 
         if (cartItems.length === 0) {
@@ -139,6 +236,9 @@ jQuery(document).ready(function($) {
                 </div>
             `);
         } else {
+            // Build all items first, then insert at once
+            const itemsHtml = [];
+
             cartItems.forEach(item => {
                 const total = (item.price * item.quantity).toFixed(2);
                 const customClass = item.is_custom ? 'custom-item' : '';
@@ -155,16 +255,21 @@ jQuery(document).ready(function($) {
 
                 // Check discount eligibility
                 let discountBadge = '';
-                if (appliedCoupon && !item.is_custom) {
+                if (appliedCoupon) {
                     const isEligible = isItemEligibleForCoupon(item, appliedCoupon);
                     if (isEligible) {
                         discountBadge = '<span class="wbs-pos-discount-badge active">Discount Applied</span>';
                     } else {
                         discountBadge = '<span class="wbs-pos-discount-badge not-eligible">Discount Not Applied</span>';
                     }
+
+                    // Add toggle button for custom items
+                    if (item.is_custom) {
+                        discountBadge += ' <button type="button" class="wbs-pos-discount-toggle" data-item-id="' + item.id + '" title="Toggle discount">⇄</button>';
+                    }
                 }
 
-                cartItemsContainer.append(`
+                itemsHtml.push(`
                     <div class="wbs-pos-cart-item ${customClass}" data-item-id="${item.id}">
                         <div class="wbs-pos-item-image">${imageHtml}</div>
                         <div class="wbs-pos-item-details">
@@ -181,16 +286,29 @@ jQuery(document).ready(function($) {
                     </div>
                 `);
             });
+
+            // Insert all items at once (order is already correct from array)
+            cartItemsContainer.html(itemsHtml.join(''));
         }
 
         updateCartTotals();
         updateCartHeader();
+
+        // ALWAYS scroll to top after updating (newest items are first in array)
+        const container = cartItemsContainer[0];
+        if (container) {
+            container.scrollTop = 0;
+            // Force again after a moment
+            setTimeout(() => { container.scrollTop = 0; }, 10);
+            setTimeout(() => { container.scrollTop = 0; }, 50);
+            setTimeout(() => { container.scrollTop = 0; }, 100);
+        }
     }
 
     function isItemEligibleForCoupon(item, coupon) {
-        // Custom items are never eligible for coupons
+        // Custom items check their discount_enabled flag
         if (item.is_custom) {
-            return false;
+            return item.discount_enabled === true;
         }
 
         const productId = item.product_id;
@@ -287,6 +405,17 @@ jQuery(document).ready(function($) {
         updateCartDisplay();
     });
 
+    // Toggle discount on custom item
+    $(document).on('click', '.wbs-pos-discount-toggle', function() {
+        const itemId = parseInt($(this).data('item-id'));
+        const item = cartItems.find(i => i.id === itemId);
+
+        if (item && item.is_custom) {
+            item.discount_enabled = !item.discount_enabled;
+            updateCartDisplay();
+        }
+    });
+
     // ========================================
     // KEYPAD
     // ========================================
@@ -315,10 +444,57 @@ jQuery(document).ready(function($) {
         const amount = parseFloat(keypadValue);
 
         if (isNaN(amount) || amount <= 0) {
-            alert('Please enter a valid amount');
+            showNotification('Please enter a valid amount', 'error');
             return;
         }
 
+        // If coupon is active, show modal with discount option
+        if (appliedCoupon) {
+            showCustomItemModal(amount);
+        } else {
+            // No coupon, just add the item
+            addCustomItemToCart(amount, false);
+        }
+    });
+
+    function showCustomItemModal(amount) {
+        const couponInfo = `${appliedCoupon.code} (${appliedCoupon.amount}${appliedCoupon.discount_type === 'percent' ? '%' : ''} off)`;
+
+        const modalHtml = `
+            <div id="wbs-pos-custom-item-modal" class="wbs-pos-modal">
+                <div class="wbs-pos-modal-content">
+                    <h3>Add Custom Item</h3>
+                    <p>Add $${amount.toFixed(2)} custom item to cart</p>
+                    <div style="margin: 15px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="wbs-pos-custom-discount" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-size: 14px; font-weight: 600;">Apply ${couponInfo} discount</span>
+                        </label>
+                    </div>
+                    <div class="wbs-pos-modal-buttons">
+                        <button type="button" id="wbs-pos-custom-add" class="wbs-pos-modal-btn wbs-pos-modal-btn-primary">Add Item</button>
+                        <button type="button" id="wbs-pos-custom-cancel" class="wbs-pos-modal-btn wbs-pos-modal-btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('body').append(modalHtml);
+
+        // Add button
+        $('#wbs-pos-custom-add').on('click', function() {
+            const discountEnabled = $('#wbs-pos-custom-discount').is(':checked');
+            addCustomItemToCart(amount, discountEnabled);
+            closeCustomItemModal();
+        });
+
+        // Cancel button
+        $('#wbs-pos-custom-cancel').on('click', function() {
+            closeCustomItemModal();
+        });
+    }
+
+    function addCustomItemToCart(amount, discountEnabled) {
         const customItem = {
             id: ++itemCounter,
             product_id: 0,
@@ -327,7 +503,9 @@ jQuery(document).ready(function($) {
             price: amount,
             quantity: 1,
             image_url: '',
-            is_custom: true
+            category_ids: [],
+            is_custom: true,
+            discount_enabled: discountEnabled
         };
 
         cartItems.unshift(customItem); // Add to top
@@ -336,7 +514,11 @@ jQuery(document).ready(function($) {
         // Reset keypad
         keypadValue = '0.00';
         updateKeypadDisplay();
-    });
+    }
+
+    function closeCustomItemModal() {
+        $('#wbs-pos-custom-item-modal').remove();
+    }
 
     // ========================================
     // COUPON
@@ -459,6 +641,7 @@ jQuery(document).ready(function($) {
         }
 
         const customerEmail = $('#wbs-pos-customer-email').val().trim();
+        const $btn = $(this);
 
         const orderData = {
             items: cartItems,
@@ -469,7 +652,10 @@ jQuery(document).ready(function($) {
             coupon_code: appliedCoupon ? appliedCoupon.code : null
         };
 
-        $(this).prop('disabled', true).text('Processing...');
+        // Add loading state with animated spinner
+        $btn.prop('disabled', true)
+            .addClass('wbs-pos-btn-loading')
+            .html('<span class="wbs-pos-spinner"></span> Processing...');
 
         $.ajax({
             url: wbs_ajax.ajax_url,
@@ -503,42 +689,116 @@ jQuery(document).ready(function($) {
                 showNotification('Error creating order. Please try again.', 'error');
             },
             complete: function() {
-                $('#wbs-pos-complete-sale-btn').prop('disabled', false).text('✓ COMPLETE SALE');
+                $btn.prop('disabled', false)
+                    .removeClass('wbs-pos-btn-loading')
+                    .html('✓ COMPLETE SALE');
             }
         });
     });
 
-    // ========================================
-    // FULLSCREEN
-    // ========================================
-    $('#wbs-pos-fullscreen-toggle').on('click', function() {
-        const element = document.documentElement;
 
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
+    // ========================================
+    // PAGE REFRESH WARNING & CART PERSISTENCE
+    // ========================================
+
+    // Save cart to localStorage whenever it changes
+    function saveCartToStorage() {
+        if (cartItems.length > 0) {
+            localStorage.setItem('wbs_pos_cart', JSON.stringify({
+                items: cartItems,
+                itemCounter: itemCounter,
+                timestamp: Date.now()
+            }));
         } else {
-            if (element.requestFullscreen) {
-                element.requestFullscreen();
-            } else if (element.webkitRequestFullscreen) {
-                element.webkitRequestFullscreen();
-            } else if (element.mozRequestFullScreen) {
-                element.mozRequestFullScreen();
-            } else if (element.msRequestFullscreen) {
-                element.msRequestFullscreen();
+            localStorage.removeItem('wbs_pos_cart');
+        }
+    }
+
+    // Load cart from localStorage on page load
+    function loadCartFromStorage() {
+        const saved = localStorage.getItem('wbs_pos_cart');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                const age = Date.now() - data.timestamp;
+
+                // Only restore if less than 1 hour old
+                if (age < 3600000) {
+                    // Show custom modal asking if they want to restore
+                    showRestoreCartModal(data);
+                } else {
+                    // Too old, clear it
+                    localStorage.removeItem('wbs_pos_cart');
+                }
+            } catch (e) {
+                console.error('Failed to parse saved cart:', e);
+                localStorage.removeItem('wbs_pos_cart');
             }
         }
+    }
+
+    // Show modal asking to restore previous cart
+    function showRestoreCartModal(data) {
+        const itemCount = data.items.length;
+        const modal = $(`
+            <div class="wbs-pos-confirm-modal-overlay">
+                <div class="wbs-pos-confirm-modal">
+                    <div class="wbs-pos-confirm-icon">🛒</div>
+                    <h2 class="wbs-pos-confirm-title">Restore Previous Cart?</h2>
+                    <p class="wbs-pos-confirm-message">
+                        You have ${itemCount} item${itemCount !== 1 ? 's' : ''} from a previous session.
+                        <br>Would you like to restore them?
+                    </p>
+                    <div class="wbs-pos-confirm-buttons">
+                        <button type="button" class="wbs-pos-confirm-btn wbs-pos-confirm-cancel">Start Fresh</button>
+                        <button type="button" class="wbs-pos-confirm-btn wbs-pos-confirm-ok">Restore Cart</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        $('body').append(modal);
+
+        // Restore cart
+        modal.find('.wbs-pos-confirm-ok').on('click', function() {
+            cartItems = data.items;
+            itemCounter = data.itemCounter;
+            updateCartDisplay();
+            modal.remove();
+        });
+
+        // Start fresh
+        modal.find('.wbs-pos-confirm-cancel').on('click', function() {
+            localStorage.removeItem('wbs_pos_cart');
+            modal.remove();
+        });
+
+        // Show modal
+        setTimeout(function() {
+            modal.addClass('show');
+        }, 100);
+    }
+
+    // Override updateCartDisplay to also save to storage
+    const originalUpdateCartDisplay = updateCartDisplay;
+    updateCartDisplay = function() {
+        originalUpdateCartDisplay();
+        saveCartToStorage();
+    };
+
+    // Load cart on page load
+    $(document).ready(function() {
+        loadCartFromStorage();
     });
 
-    // Update fullscreen button text
-    $(document).on('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange', function() {
-        const button = $('#wbs-pos-fullscreen-toggle');
-
-        if (document.fullscreenElement) {
-            button.text('Exit Fullscreen');
-            $('body').addClass('wbs-pos-fullscreen');
-        } else {
-            button.text('⛶ Full Screen');
-            $('body').removeClass('wbs-pos-fullscreen');
+    // Warn user before leaving/refreshing if cart has items
+    window.addEventListener('beforeunload', function(e) {
+        if (cartItems.length > 0) {
+            saveCartToStorage(); // Save one last time
+            // Show browser's native warning
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
         }
     });
 
@@ -546,24 +806,42 @@ jQuery(document).ready(function($) {
     // MODALS & NOTIFICATIONS
     // ========================================
     function showNotification(message, type) {
-        const notification = $(`
-            <div class="wbs-pos-notification wbs-pos-notification-${type}">
-                ${message}
+        // REBUILT - Create centered modal popup
+        const modal = $(`
+            <div class="wbs-pos-quick-modal wbs-pos-quick-modal-${type}">
+                <div class="wbs-pos-quick-modal-content">
+                    <div class="wbs-pos-quick-modal-inner">
+                        <div class="wbs-pos-quick-modal-icon">
+                            ${type === 'error' ? '⚠️' : '✓'}
+                        </div>
+                        <div class="wbs-pos-quick-modal-message">${message}</div>
+                    </div>
+                </div>
             </div>
         `);
 
-        $('body').append(notification);
+        $('body').append(modal);
 
-        setTimeout(function() {
-            notification.addClass('show');
-        }, 10);
-
-        setTimeout(function() {
-            notification.removeClass('show');
+        // Click anywhere to close
+        modal.on('click', function() {
+            modal.removeClass('show');
             setTimeout(function() {
-                notification.remove();
-            }, 300);
-        }, 3000);
+                modal.remove();
+            }, 400);
+        });
+
+        // Fade in with scale animation
+        setTimeout(function() {
+            modal.addClass('show');
+        }, 100);
+
+        // Auto-close after 2 seconds
+        setTimeout(function() {
+            modal.removeClass('show');
+            setTimeout(function() {
+                modal.remove();
+            }, 400);
+        }, 2000);
     }
 
     function showConfirmModal(message, onConfirm) {

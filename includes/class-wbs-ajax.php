@@ -13,6 +13,18 @@ class WBS_Ajax {
         add_action('wp_ajax_wbs_validate_coupon', array($this, 'validate_coupon'));
         add_action('wp_ajax_wbs_get_product_order', array($this, 'get_product_order'));
         add_action('wp_ajax_wbs_update_verification', array($this, 'update_verification'));
+        add_action('wp_ajax_wbs_dismiss_pos_notice', array($this, 'dismiss_pos_notice'));
+    }
+
+    public function dismiss_pos_notice() {
+        check_ajax_referer('wbs_dismiss_notice', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Unauthorized');
+        }
+
+        update_user_meta(get_current_user_id(), 'wbs_pos_notice_dismissed', true);
+        wp_send_json_success();
     }
     
     public function search_product() {

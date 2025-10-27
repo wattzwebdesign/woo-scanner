@@ -1,13 +1,20 @@
 /* WooCommerce Barcode Scanner - POS System Styles */
+/* IMPORTANT: All styles use !important to override theme CSS */
 
 /* Base Styles */
-body.wbs-pos-page {
+html.wbs-pos-standalone,
+body.wbs-pos-page,
+body.wbs-pos-standalone {
     background: #e8f4f5 !important;
     margin: 0 !important;
     padding: 0 !important;
-    height: 100dvh;
-    height: 100vh; /* Fallback for browsers that don't support dvh */
-    overflow: hidden;
+    height: 100vh !important; /* Fallback for older browsers */
+    height: 100dvh !important; /* Dynamic viewport height for mobile */
+    min-height: 100vh !important; /* Fallback */
+    min-height: 100dvh !important; /* Dynamic viewport height for mobile */
+    width: 100vw !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
 }
 
 /* Hide admin notices on POS page */
@@ -35,8 +42,19 @@ body.wbs-pos-page .wrap {
     padding: 0 !important;
     display: flex !important;
     flex-direction: column !important;
-    height: calc(100vh - 32px) !important;
+    height: calc(100vh - 32px) !important; /* Fallback */
+    height: calc(100dvh - 32px) !important; /* Dynamic for mobile */
+    min-height: calc(100vh - 32px) !important; /* Fallback */
+    min-height: calc(100dvh - 32px) !important; /* Dynamic for mobile */
     overflow: hidden !important;
+}
+
+/* Standalone POS (no admin bar) */
+body.wbs-pos-standalone .wbs-pos-wrap {
+    height: 100vh !important; /* Fallback */
+    height: 100dvh !important; /* Dynamic for mobile */
+    min-height: 100vh !important; /* Fallback */
+    min-height: 100dvh !important; /* Dynamic for mobile */
 }
 
 /* Header */
@@ -70,22 +88,6 @@ body.wbs-pos-page .wrap {
     max-width: 800px;
 }
 
-.wbs-pos-fullscreen-btn {
-    background: #0B2349;
-    color: white;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.wbs-pos-fullscreen-btn:hover {
-    background: #061628;
-    transform: translateY(-1px);
-}
 
 /* Scan Input Wrapper */
 .wbs-pos-scan-wrapper {
@@ -187,20 +189,24 @@ body.wbs-pos-page .wrap {
     grid-template-columns: 58% 42%;
     gap: 15px;
     flex: 1;
+    min-height: 0;
+    max-height: 100%;
     overflow: hidden;
     padding: 15px;
 }
 
-/* Left Panel - Cart */
+/* Left Panel - Cart - GRID LAYOUT */
 .wbs-pos-cart-section {
     background: white;
     border-radius: 8px;
     padding: 20px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100%;
+    max-height: 100%;
     overflow: hidden;
+    gap: 0;
 }
 
 .wbs-pos-cart-header {
@@ -211,16 +217,16 @@ body.wbs-pos-page .wrap {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-shrink: 0;
+    grid-row: 1;
 }
 
 .wbs-pos-cart-items {
-    flex: 1;
+    grid-row: 2;
     overflow-y: auto;
     overflow-x: hidden;
-    margin-bottom: 15px;
-    min-height: 0;
     padding-right: 5px;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
 }
 
 .wbs-pos-cart-items::-webkit-scrollbar {
@@ -314,6 +320,8 @@ body.wbs-pos-page .wrap {
     letter-spacing: 0.3px;
     margin-top: 4px;
     white-space: nowrap;
+    max-width: 150px;
+    text-align: center;
 }
 
 .wbs-pos-discount-badge.active {
@@ -324,6 +332,29 @@ body.wbs-pos-page .wrap {
 .wbs-pos-discount-badge.not-eligible {
     background: #e9ecef;
     color: #6c757d;
+}
+
+.wbs-pos-discount-toggle {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    margin-left: 6px;
+    background: #0B2349;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.wbs-pos-discount-toggle:hover {
+    background: #85D0D7;
+    transform: scale(1.1);
 }
 
 .wbs-pos-item-title {
@@ -384,19 +415,20 @@ body.wbs-pos-page .wrap {
     transform: scale(1.1);
 }
 
-/* Cart Totals */
+/* Cart Totals - GRID ROW 3 */
 .wbs-pos-cart-totals {
+    grid-row: 3;
     border-top: 3px solid #e9ecef;
-    padding-top: 15px;
-    padding-bottom: 20px;
-    flex-shrink: 0;
+    padding: 15px 0 10px 0;
+    background: white;
 }
 
 .wbs-pos-total-row {
     display: flex;
     justify-content: space-between;
-    padding: 12px 0;
+    padding: 10px 0;
     font-size: 18px;
+    line-height: 1.3;
 }
 
 .wbs-pos-total-row.subtotal {
@@ -411,11 +443,12 @@ body.wbs-pos-page .wrap {
 
 .wbs-pos-total-row.final {
     border-top: 3px solid #212529;
-    margin-top: 10px;
-    padding-top: 20px;
-    font-size: 32px;
+    margin-top: 12px;
+    padding-top: 18px;
+    font-size: 28px;
     font-weight: 800;
     color: #212529;
+    line-height: 1.2;
 }
 
 /* Right Panel - Actions */
@@ -459,19 +492,23 @@ body.wbs-pos-page .wrap {
 .wbs-pos-keypad-btn {
     padding: 16px;
     background: #f8f9fa;
-    border: 2px solid #e9ecef;
+    border: none;
     border-radius: 8px;
     font-size: 22px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
+    outline: none;
 }
 
 .wbs-pos-keypad-btn:hover {
     background: #85D0D7;
     color: white;
-    border-color: #85D0D7;
     transform: scale(1.05);
+}
+
+.wbs-pos-keypad-btn:focus {
+    outline: none;
 }
 
 .wbs-pos-keypad-actions {
@@ -488,6 +525,7 @@ body.wbs-pos-page .wrap {
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
+    outline: none;
     transition: all 0.2s;
 }
 
@@ -504,6 +542,7 @@ body.wbs-pos-page .wrap {
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
+    outline: none;
 }
 
 .wbs-pos-add-custom-btn:hover {
@@ -546,6 +585,11 @@ body.wbs-pos-page .wrap {
     align-items: center;
     justify-content: center;
     gap: 10px;
+    outline: none;
+}
+
+.wbs-pos-action-btn:focus {
+    outline: none;
 }
 
 .wbs-pos-discount-btn {
@@ -581,47 +625,34 @@ body.wbs-pos-page .wrap {
     box-shadow: 0 6px 20px rgba(11, 35, 73, 0.4);
 }
 
-/* Fullscreen Mode */
-html:fullscreen,
-html:-webkit-full-screen,
-html:-moz-full-screen,
-html:-ms-fullscreen {
-    background: #e8f4f5;
+/* Loading state for Complete Sale button */
+.wbs-pos-btn-loading {
+    opacity: 0.8;
+    cursor: not-allowed !important;
 }
 
-body.wbs-pos-fullscreen {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #e8f4f5 !important;
+.wbs-pos-btn-loading:hover {
+    transform: none !important;
 }
 
-.wbs-pos-fullscreen #wpadminbar,
-.wbs-pos-fullscreen #adminmenumain,
-.wbs-pos-fullscreen #adminmenuback,
-.wbs-pos-fullscreen #adminmenuwrap,
-.wbs-pos-fullscreen #wpcontent > h1,
-.wbs-pos-fullscreen .notice,
-.wbs-pos-fullscreen .updated,
-.wbs-pos-fullscreen .error,
-.wbs-pos-fullscreen .update-nag,
-.wbs-pos-fullscreen div.notice,
-.wbs-pos-fullscreen div.updated,
-.wbs-pos-fullscreen div.error {
-    display: none !important;
+/* Spinner animation */
+.wbs-pos-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: wbs-spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
 }
 
-.wbs-pos-fullscreen .wrap {
-    margin: 0 !important;
-    padding: 0 !important;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
+@keyframes wbs-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
-.wbs-pos-fullscreen #wpcontent {
-    margin: 0 !important;
-    padding: 0 !important;
-}
 
 /* Modals */
 .wbs-pos-modal {
@@ -761,35 +792,167 @@ body.wbs-pos-fullscreen {
 }
 
 /* Notifications */
-.wbs-pos-notification {
+/* Quick Popup Modal - COMPLETELY REBUILT */
+.wbs-pos-quick-modal {
     position: fixed;
-    top: 80px;
-    right: 20px;
-    background: white;
-    padding: 16px 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    font-size: 16px;
-    font-weight: 600;
-    z-index: 99998;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(11, 35, 73, 0.85);
+    z-index: 999999;
     opacity: 0;
-    transform: translateX(400px);
-    transition: all 0.3s ease;
+    transition: opacity 0.3s ease;
+    display: table;
 }
 
-.wbs-pos-notification.show {
+.wbs-pos-quick-modal.show {
     opacity: 1;
-    transform: translateX(0);
 }
 
-.wbs-pos-notification-success {
-    border-left: 4px solid #85D0D7;
-    color: #0B2349;
+.wbs-pos-quick-modal-content {
+    display: table-cell;
+    vertical-align: middle;
+    text-align: center;
 }
 
-.wbs-pos-notification-error {
-    border-left: 4px solid #CB9C9B;
-    color: #721c24;
+.wbs-pos-quick-modal-inner {
+    display: inline-block;
+    background: white;
+    padding: 60px 80px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    min-width: 500px;
+    transform: scale(0.5);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.wbs-pos-quick-modal.show .wbs-pos-quick-modal-inner {
+    transform: scale(1);
+}
+
+.wbs-pos-quick-modal-icon {
+    font-size: 100px;
+    line-height: 1;
+    margin-bottom: 30px;
+}
+
+.wbs-pos-quick-modal-message {
+    font-size: 32px;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.wbs-pos-quick-modal-error .wbs-pos-quick-modal-icon {
+    color: #CB9C9B;
+}
+
+.wbs-pos-quick-modal-error .wbs-pos-quick-modal-message {
+    color: #CB9C9B;
+}
+
+.wbs-pos-quick-modal-success .wbs-pos-quick-modal-icon {
+    color: #85D0D7;
+}
+
+.wbs-pos-quick-modal-success .wbs-pos-quick-modal-message {
+    color: #85D0D7;
+}
+
+/* Restore Cart Modal */
+.wbs-pos-confirm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(11, 35, 73, 0.9);
+    z-index: 999999;
+    display: table;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.wbs-pos-confirm-modal-overlay.show {
+    opacity: 1;
+}
+
+.wbs-pos-confirm-modal {
+    display: table-cell;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.wbs-pos-confirm-modal > div {
+    display: inline-block;
+}
+
+.wbs-pos-confirm-modal-overlay .wbs-pos-confirm-modal > div {
+    background: white;
+    padding: 50px 60px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    min-width: 500px;
+    max-width: 600px;
+}
+
+.wbs-pos-confirm-icon {
+    font-size: 80px;
+    line-height: 1;
+    margin-bottom: 20px;
+}
+
+.wbs-pos-confirm-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0 0 20px 0;
+}
+
+.wbs-pos-confirm-message {
+    font-size: 18px;
+    color: #6c757d;
+    line-height: 1.6;
+    margin: 0 0 30px 0;
+}
+
+.wbs-pos-confirm-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.wbs-pos-confirm-btn {
+    padding: 16px 40px;
+    font-size: 18px;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.wbs-pos-confirm-cancel {
+    background: #6c757d;
+    color: white;
+}
+
+.wbs-pos-confirm-cancel:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+}
+
+.wbs-pos-confirm-ok {
+    background: #85D0D7;
+    color: white;
+}
+
+.wbs-pos-confirm-ok:hover {
+    background: #6dbfc7;
+    transform: translateY(-2px);
 }
 
 /* Responsive */
