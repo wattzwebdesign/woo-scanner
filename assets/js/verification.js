@@ -10,7 +10,46 @@ jQuery(document).ready(function($) {
         return;
     }
 
-    scanInput.focus();
+    // Show verification notice modal on page load
+    var modal = $('#wbs-verification-notice-modal');
+    console.log('Modal element found:', modal.length);
+    console.log('Modal element:', modal);
+
+    if (modal.length > 0) {
+        var hasSeenModal = sessionStorage.getItem('wbs_verification_notice_seen');
+        console.log('Has seen modal:', hasSeenModal);
+
+        // Check if user has seen the modal before (in this session)
+        if (!hasSeenModal) {
+            // Show modal immediately
+            console.log('Showing modal - adding wbs-modal-show class');
+            modal.addClass('wbs-modal-show');
+            console.log('Modal classes after adding:', modal.attr('class'));
+            console.log('Modal display style:', modal.css('display'));
+        } else {
+            console.log('Modal already seen, focusing input');
+            scanInput.focus();
+        }
+    } else {
+        console.log('Modal not found, focusing input');
+        scanInput.focus();
+    }
+
+    // Handle modal close
+    $('.wbs-modal-close').on('click', function() {
+        modal.removeClass('wbs-modal-show');
+        sessionStorage.setItem('wbs_verification_notice_seen', 'true');
+        scanInput.focus();
+    });
+
+    // Close modal when clicking outside
+    modal.on('click', function(e) {
+        if ($(e.target).is('.wbs-modal')) {
+            modal.removeClass('wbs-modal-show');
+            sessionStorage.setItem('wbs_verification_notice_seen', 'true');
+            scanInput.focus();
+        }
+    });
 
     // Handle mode toggle
     $('input[name="wbs-input-mode"]').on('change', function() {

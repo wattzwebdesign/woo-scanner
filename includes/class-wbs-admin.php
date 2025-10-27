@@ -46,6 +46,15 @@ class WBS_Admin {
             'wbs-verification',
             array($this, 'verification_page')
         );
+
+        add_submenu_page(
+            'woo-barcode-scanner',
+            'Point of Sale',
+            'Point of Sale',
+            'manage_woocommerce',
+            'wbs-pos',
+            array($this, 'pos_page')
+        );
     }
     
     public function admin_page() {
@@ -1251,6 +1260,24 @@ class WBS_Admin {
 
     public function verification_page() {
         ?>
+        <!-- Verification Notice Modal -->
+        <div id="wbs-verification-notice-modal" class="wbs-modal">
+            <div class="wbs-modal-content">
+                <div class="wbs-modal-header">
+                    <span class="wbs-modal-icon">⚠️</span>
+                    <h2>Product Verification Scanner</h2>
+                </div>
+                <div class="wbs-modal-body">
+                    <p><strong>Important:</strong> This is NOT the regular barcode scanner.</p>
+                    <p>This verification scanner should <strong>only be used when pushing products out from the canvas tote</strong>.</p>
+                    <p>For regular product scanning and editing, please use the main Barcode Scanner page.</p>
+                </div>
+                <div class="wbs-modal-footer">
+                    <button type="button" class="button button-primary wbs-modal-close">I Understand</button>
+                </div>
+            </div>
+        </div>
+
         <div class="wrap" id="wbs-verification-wrap">
             <div class="wbs-header-controls">
                 <h1>Product Verification</h1>
@@ -1259,6 +1286,15 @@ class WBS_Admin {
                         <span class="dashicons dashicons-fullscreen-alt"></span>
                         Full Screen
                     </button>
+                </div>
+            </div>
+
+            <!-- Alert Bar -->
+            <div class="wbs-verification-alert-bar">
+                <div class="wbs-alert-icon">⚠️</div>
+                <div class="wbs-alert-content">
+                    <strong>VERIFICATION MODE:</strong> This scanner is for verifying products from the canvas tote only.
+                    For regular scanning, use <a href="<?php echo admin_url('admin.php?page=woo-barcode-scanner'); ?>">Barcode Scanner</a>.
                 </div>
             </div>
 
@@ -1458,6 +1494,110 @@ class WBS_Admin {
             $query->set('meta_key', '_verified');
             $query->set('orderby', 'meta_value');
         }
+    }
+
+    public function pos_page() {
+        $site_logo = get_site_icon_url(50);
+        if (!$site_logo) {
+            $site_logo = plugins_url('../assets/images/logo.png', __FILE__);
+        }
+        ?>
+        <div class="wrap wbs-pos-wrap">
+            <div class="wbs-pos-header">
+                <div class="wbs-pos-header-left">
+                    <img src="<?php echo esc_url($site_logo); ?>" alt="Store Logo" class="wbs-pos-logo">
+                </div>
+                <div class="wbs-pos-header-center">
+                    <div class="wbs-pos-scan-wrapper">
+                        <div class="wbs-pos-mode-toggle">
+                            <label>
+                                <input type="radio" name="wbs-pos-mode" value="scan" checked>
+                                <span>Scan</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="wbs-pos-mode" value="type">
+                                <span>Enter</span>
+                            </label>
+                        </div>
+                        <div class="wbs-pos-scan-input-group">
+                            <input type="text" id="wbs-pos-scan-input" placeholder="Scan product/order" autocomplete="off">
+                            <button type="button" id="wbs-pos-search-btn">search fields</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" id="wbs-pos-fullscreen-toggle" class="wbs-pos-fullscreen-btn">⛶ Full Screen</button>
+            </div>
+
+            <div class="wbs-pos-container">
+                <!-- LEFT PANEL: CART -->
+                <div class="wbs-pos-cart-section">
+                    <div class="wbs-pos-cart-header">
+                        🛒 Cart Items (<span id="wbs-pos-cart-count">0</span>)
+                    </div>
+
+                    <div class="wbs-pos-cart-items" id="wbs-pos-cart-items">
+                        <div class="wbs-pos-cart-empty">
+                            <span class="dashicons dashicons-cart"></span>
+                            <p>Cart is empty</p>
+                            <small>Scan a product to get started</small>
+                        </div>
+                    </div>
+
+                    <!-- TOTALS -->
+                    <div class="wbs-pos-cart-totals">
+                        <div class="wbs-pos-total-row subtotal">
+                            <span>Subtotal:</span>
+                            <span>$<span id="wbs-pos-subtotal">0.00</span></span>
+                        </div>
+                        <div class="wbs-pos-total-row discount" style="display: none;">
+                            <span>Discount (<span id="wbs-pos-discount-code"></span>):</span>
+                            <span>−$<span id="wbs-pos-discount-amount">0.00</span></span>
+                        </div>
+                        <div class="wbs-pos-total-row final">
+                            <span>TOTAL:</span>
+                            <span>$<span id="wbs-pos-total">0.00</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT PANEL: ACTIONS -->
+                <div class="wbs-pos-actions-section">
+                    <!-- KEYPAD -->
+                    <div class="wbs-pos-keypad-panel">
+                        <div class="wbs-pos-keypad-display" id="wbs-pos-keypad-display">$0.00</div>
+                        <div class="wbs-pos-keypad-grid">
+                            <button type="button" class="wbs-pos-keypad-btn">7</button>
+                            <button type="button" class="wbs-pos-keypad-btn">8</button>
+                            <button type="button" class="wbs-pos-keypad-btn">9</button>
+                            <button type="button" class="wbs-pos-keypad-btn">4</button>
+                            <button type="button" class="wbs-pos-keypad-btn">5</button>
+                            <button type="button" class="wbs-pos-keypad-btn">6</button>
+                            <button type="button" class="wbs-pos-keypad-btn">1</button>
+                            <button type="button" class="wbs-pos-keypad-btn">2</button>
+                            <button type="button" class="wbs-pos-keypad-btn">3</button>
+                            <button type="button" class="wbs-pos-keypad-btn">0</button>
+                            <button type="button" class="wbs-pos-keypad-btn">00</button>
+                            <button type="button" class="wbs-pos-keypad-btn">.</button>
+                        </div>
+                        <div class="wbs-pos-keypad-actions">
+                            <button type="button" id="wbs-pos-keypad-clear" class="wbs-pos-clear-btn">Clear</button>
+                            <button type="button" id="wbs-pos-add-custom" class="wbs-pos-add-custom-btn">Add Custom Item</button>
+                        </div>
+                    </div>
+
+                    <!-- QUICK ACTIONS -->
+                    <div class="wbs-pos-quick-actions-panel">
+                        <input type="email" id="wbs-pos-customer-email" class="wbs-pos-customer-email" placeholder="Customer Email (optional)">
+                        <div class="wbs-pos-actions-row">
+                            <button type="button" id="wbs-pos-discount-btn" class="wbs-pos-action-btn wbs-pos-discount-btn">🎟️ Apply Discount</button>
+                            <button type="button" id="wbs-pos-clear-cart-btn" class="wbs-pos-action-btn wbs-pos-clear-cart-btn">🗑️ Clear Cart</button>
+                        </div>
+                        <button type="button" id="wbs-pos-complete-sale-btn" class="wbs-pos-action-btn wbs-pos-complete-sale-btn">✓ COMPLETE SALE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php
     }
 }
 

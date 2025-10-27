@@ -56,7 +56,7 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         private function define_constants() {
             define('WBS_PLUGIN_URL', plugin_dir_url(__FILE__));
             define('WBS_PLUGIN_PATH', plugin_dir_path(__FILE__));
-            define('WBS_VERSION', '1.1.1');
+            define('WBS_VERSION', '1.1.3');
         }
         
         private function includes() {
@@ -89,7 +89,25 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         }
         
         public function admin_enqueue_scripts($hook) {
-            if ('toplevel_page_woo-barcode-scanner' !== $hook && 'barcode-scanner_page_wbs-create-order' !== $hook && 'barcode-scanner_page_wbs-verification' !== $hook) {
+            if ('toplevel_page_woo-barcode-scanner' !== $hook && 'barcode-scanner_page_wbs-create-order' !== $hook && 'barcode-scanner_page_wbs-verification' !== $hook && 'barcode-scanner_page_wbs-pos' !== $hook) {
+                return;
+            }
+
+            // Enqueue POS-specific scripts for POS page
+            if ('barcode-scanner_page_wbs-pos' === $hook) {
+                wp_enqueue_style('wbs-pos', WBS_PLUGIN_URL . 'assets/css/pos.css', array(), WBS_VERSION);
+                wp_enqueue_script('wbs-pos', WBS_PLUGIN_URL . 'assets/js/pos.js', array('jquery'), WBS_VERSION, true);
+
+                wp_localize_script('wbs-pos', 'wbs_ajax', array(
+                    'ajax_url' => admin_url('admin-ajax.php'),
+                    'nonce' => wp_create_nonce('wbs_nonce')
+                ));
+
+                // Add body class for POS page
+                add_filter('admin_body_class', function($classes) {
+                    return $classes . ' wbs-pos-page';
+                });
+
                 return;
             }
 

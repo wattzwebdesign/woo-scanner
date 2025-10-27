@@ -296,13 +296,25 @@ class WBS_Ajax {
             
             // Add items to the order
             foreach ($order_data['items'] as $item) {
-                $product = wc_get_product($item['product_id']);
-                
-                if (!$product) {
-                    continue; // Skip invalid products
+                // Check if this is a custom item
+                if (!empty($item['is_custom']) && $item['is_custom'] === true) {
+                    // Add custom item as a fee
+                    $order->add_fee(array(
+                        'name' => sanitize_text_field($item['name']),
+                        'amount' => floatval($item['price']) * intval($item['quantity']),
+                        'taxable' => false,
+                        'tax_class' => ''
+                    ));
+                } else {
+                    // Regular product
+                    $product = wc_get_product($item['product_id']);
+
+                    if (!$product) {
+                        continue; // Skip invalid products
+                    }
+
+                    $order->add_product($product, $item['quantity']);
                 }
-                
-                $order->add_product($product, $item['quantity']);
             }
             
             // Set customer information if provided

@@ -1,5 +1,197 @@
 /* Verification Page Styles */
 
+/* Modal Styles */
+.wbs-modal {
+    display: none;
+    position: fixed;
+    z-index: 999999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.wbs-modal.wbs-modal-show {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.wbs-modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.4s ease;
+    overflow: hidden;
+}
+
+.wbs-modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    text-align: center;
+}
+
+.wbs-modal-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 15px;
+    animation: bounce 1s ease infinite;
+}
+
+.wbs-modal-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+}
+
+.wbs-modal-body {
+    padding: 30px;
+    line-height: 1.6;
+}
+
+.wbs-modal-body p {
+    margin: 0 0 15px 0;
+    font-size: 15px;
+    color: #333;
+}
+
+.wbs-modal-body p:last-child {
+    margin-bottom: 0;
+}
+
+.wbs-modal-body strong {
+    color: #764ba2;
+    font-weight: 600;
+}
+
+.wbs-modal-footer {
+    padding: 20px 30px 30px 30px;
+    text-align: center;
+}
+
+.wbs-modal-close {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 12px 40px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.wbs-modal-close:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.wbs-modal-close:active {
+    transform: translateY(0);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* Alert Bar */
+.wbs-verification-alert-bar {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    padding: 15px 20px;
+    margin: 0 0 20px 0;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    animation: pulseAlert 2s ease-in-out infinite;
+}
+
+.wbs-alert-icon {
+    font-size: 32px;
+    line-height: 1;
+    animation: shake 3s ease-in-out infinite;
+}
+
+.wbs-alert-content {
+    flex: 1;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.wbs-alert-content strong {
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wbs-alert-content a {
+    color: white;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.wbs-alert-content a:hover {
+    color: #ffe66d;
+}
+
+@keyframes pulseAlert {
+    0%, 100% {
+        box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(255, 107, 107, 0.5);
+    }
+}
+
+@keyframes shake {
+    0%, 100% {
+        transform: rotate(0deg);
+    }
+    10%, 30%, 50%, 70%, 90% {
+        transform: rotate(-5deg);
+    }
+    20%, 40%, 60%, 80% {
+        transform: rotate(5deg);
+    }
+}
+
 #wbs-verification-wrap {
     max-width: 100%;
 }
