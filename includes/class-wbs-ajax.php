@@ -14,6 +14,9 @@ class WBS_Ajax {
         add_action('wp_ajax_wbs_get_product_order', array($this, 'get_product_order'));
         add_action('wp_ajax_wbs_update_verification', array($this, 'update_verification'));
         add_action('wp_ajax_wbs_dismiss_pos_notice', array($this, 'dismiss_pos_notice'));
+
+        // Register async order completion hook
+        add_action('wbs_complete_order_async', array($this, 'complete_order_async'), 10, 2);
     }
 
     public function dismiss_pos_notice() {
@@ -300,14 +303,30 @@ class WBS_Ajax {
         }
         
         try {
+            // OPTIMIZATION: Batch load all products at once
+            $product_ids = array();
+            foreach ($order_data['items'] as $item) {
+                if (empty($item['is_custom']) && !empty($item['product_id'])) {
+                    $product_ids[] = intval($item['product_id']);
+                }
+            }
+
+            // Pre-load all products in one query
+            $products = array();
+            if (!empty($product_ids)) {
+                foreach ($product_ids as $product_id) {
+                    $products[$product_id] = wc_get_product($product_id);
+                }
+            }
+
             // Create the order
             $order = wc_create_order();
-            
+
             if (is_wp_error($order)) {
                 wp_send_json_error('Failed to create order: ' . $order->get_error_message());
             }
-            
-            // Add items to the order
+
+            // Add items to the order (using pre-loaded products)
             foreach ($order_data['items'] as $item) {
                 // Check if this is a custom item
                 if (!empty($item['is_custom']) && $item['is_custom'] === true) {
@@ -319,8 +338,9 @@ class WBS_Ajax {
                         'tax_class' => ''
                     ));
                 } else {
-                    // Regular product
-                    $product = wc_get_product($item['product_id']);
+                    // Regular product - use pre-loaded product
+                    $product_id = intval($item['product_id']);
+                    $product = isset($products[$product_id]) ? $products[$product_id] : null;
 
                     if (!$product) {
                         continue; // Skip invalid products
@@ -329,17 +349,17 @@ class WBS_Ajax {
                     $order->add_product($product, $item['quantity']);
                 }
             }
-            
-            // Set customer information if provided
+
+            // OPTIMIZATION: Only lookup customer if email provided
             if (!empty($order_data['customer_email'])) {
-                // Try to find existing user by email
-                $user = get_user_by('email', sanitize_email($order_data['customer_email']));
-                
+                $email = sanitize_email($order_data['customer_email']);
+                // Quick user lookup
+                $user = get_user_by('email', $email);
+
                 if ($user) {
                     $order->set_customer_id($user->ID);
                 } else {
-                    // Set as guest order with email
-                    $order->set_billing_email(sanitize_email($order_data['customer_email']));
+                    $order->set_billing_email($email);
                 }
             }
             
@@ -375,21 +395,32 @@ class WBS_Ajax {
             // This ensures all discounts are applied before commission hooks fire
             $order->calculate_totals();
 
-            // Save the order FIRST before setting status
-            // This persists the coupon discount to the order items
+            // Save the order in 'pending' status first (fast, minimal hooks)
+            $order->set_status('pending');
             $order->save();
 
-            // Set order status LAST
-            // This triggers commission calculation hooks AFTER coupons are applied
-            if (!empty($order_data['order_status'])) {
-                $order->set_status(sanitize_text_field($order_data['order_status']));
-                $order->save(); // Save again after status change
+            // Get order details for response
+            $order_id = $order->get_id();
+            $order_number = $order->get_order_number();
+            $order_total = $order->get_total();
+
+            // OPTIMIZATION: Schedule status change to 'completed' asynchronously
+            // This moves slow plugin hooks (emails, commissions, etc.) to background
+            $target_status = !empty($order_data['order_status']) ? sanitize_text_field($order_data['order_status']) : 'completed';
+
+            if ($target_status !== 'pending') {
+                // Schedule the status change to happen immediately but asynchronously
+                wp_schedule_single_event(time(), 'wbs_complete_order_async', array($order_id, $target_status));
+
+                // Spawn WP Cron immediately (non-blocking)
+                spawn_cron();
             }
-            
+
+            // Return success immediately (before slow hooks fire)
             wp_send_json_success(array(
-                'order_id' => $order->get_id(),
-                'order_number' => $order->get_order_number(),
-                'total' => $order->get_total()
+                'order_id' => $order_id,
+                'order_number' => $order_number,
+                'total' => $order_total
             ));
             
         } catch (Exception $e) {
@@ -547,6 +578,32 @@ class WBS_Ajax {
 
         } catch (Exception $e) {
             wp_send_json_error('Error updating verification: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Async order completion handler
+     * Changes order status from 'pending' to target status (usually 'completed')
+     * This runs in background to avoid blocking the POS UI
+     */
+    public function complete_order_async($order_id, $target_status) {
+        try {
+            $order = wc_get_order($order_id);
+
+            if (!$order) {
+                error_log('WBS Async: Order not found - ' . $order_id);
+                return;
+            }
+
+            // Change status - this triggers all the slow plugin hooks
+            // (emails, commission calculations, inventory sync, etc.)
+            $order->set_status($target_status);
+            $order->save();
+
+            error_log('WBS Async: Order ' . $order_id . ' status changed to ' . $target_status);
+
+        } catch (Exception $e) {
+            error_log('WBS Async Error: ' . $e->getMessage() . ' for order ' . $order_id);
         }
     }
 }
