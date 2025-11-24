@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS System Preview - WooCommerce Barcode Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #e8f4f5;
+            padding: 0;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pos-header {
+            background: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+            gap: 20px;
+        }
+
+        .pos-header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .pos-logo {
+            height: 50px;
+            width: auto;
+        }
+
+        .pos-header-center {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            max-width: 800px;
+        }
+
+        .fullscreen-btn {
+            background: #0B2349;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .fullscreen-btn:hover {
+            background: #061628;
+            transform: translateY(-1px);
+        }
+
+        .pos-container {
+            display: grid;
+            grid-template-columns: 60% 40%;
+            gap: 15px;
+            flex: 1;
+            overflow: hidden;
+            padding: 15px;
+        }
+
+        /* LEFT SIDE - CART */
+        .cart-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .cart-header {
+            font-size: 22px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .cart-items {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            margin-bottom: 15px;
+            min-height: 0;
+            padding-right: 5px;
+        }
+
+        .cart-items::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .cart-items::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+
+        .cart-items::-webkit-scrollbar-thumb {
+            background: #adb5bd;
+            border-radius: 5px;
+            border: 2px solid #f1f1f1;
+        }
+
+        .cart-items::-webkit-scrollbar-thumb:hover {
+            background: #6c757d;
+        }
+
+        .cart-item {
+            display: grid;
+            grid-template-columns: 80px 1fr 100px 40px;
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            align-items: center;
+            border-left: 4px solid #85D0D7;
+        }
+
+        .cart-item-image {
+            width: 80px;
+            height: 80px;
+            background: #e9ecef;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+
+        .cart-item-details {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .cart-item-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #212529;
+        }
+
+        .cart-item-sku {
+            font-size: 13px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .cart-item-price {
+            font-size: 16px;
+            color: #0B2349;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        .cart-item-qty {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qty-display {
+            font-size: 20px;
+            font-weight: 700;
+            color: #212529;
+            text-align: center;
+        }
+
+        .item-subtotal {
+            font-size: 14px;
+            color: #6c757d;
+            text-align: center;
+        }
+
+        .remove-btn {
+            width: 40px;
+            height: 40px;
+            background: #CB9C9B;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .remove-btn:hover {
+            background: #b87d7c;
+            transform: scale(1.1);
+        }
+
+        .cart-totals {
+            border-top: 3px solid #e9ecef;
+            padding-top: 15px;
+            flex-shrink: 0;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            font-size: 18px;
+        }
+
+        .total-row.subtotal {
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .total-row.discount {
+            color: #CB9C9B;
+            font-weight: 600;
+        }
+
+        .total-row.final {
+            border-top: 3px solid #212529;
+            margin-top: 10px;
+            padding-top: 20px;
+            font-size: 32px;
+            font-weight: 800;
+            color: #212529;
+        }
+
+        /* RIGHT SIDE - ACTIONS */
+        .actions-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .keypad-panel, .quick-actions-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #495057;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: none;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 0;
+            background: white;
+            border: 2px solid #85D0D7;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .mode-toggle label {
+            flex: 1;
+            padding: 12px 24px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            color: #0B2349;
+            background: white;
+            transition: all 0.2s;
+            border-right: 1px solid #85D0D7;
+        }
+
+        .mode-toggle label:last-child {
+            border-right: none;
+        }
+
+        .mode-toggle input {
+            display: none;
+        }
+
+        .mode-toggle input:checked + span {
+            background: #85D0D7;
+            color: white;
+        }
+
+        .mode-toggle label:hover:not(:has(input:checked)) {
+            background: #e8f4f5;
+        }
+
+        .mode-toggle span {
+            display: block;
+            padding: 0;
+        }
+
+        .scan-input-wrapper {
+            display: flex;
+            gap: 0;
+            border: 2px solid #85D0D7;
+            border-radius: 6px;
+            overflow: hidden;
+            background: white;
+            position: relative;
+        }
+
+        .scan-mode-toggle-left {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            background: white;
+            border-right: 2px solid #e9ecef;
+        }
+
+        .scan-mode-toggle-left label {
+            padding: 8px 18px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            color: #6c757d;
+            background: #f8f9fa;
+            transition: all 0.2s;
+            border-bottom: 1px solid #dee2e6;
+            min-width: 80px;
+        }
+
+        .scan-mode-toggle-left label:last-child {
+            border-bottom: none;
+        }
+
+        .scan-mode-toggle-left input {
+            display: none;
+        }
+
+        .scan-mode-toggle-left input:checked {
+            /* Apply to the label itself */
+        }
+
+        .scan-mode-toggle-left label:has(input:checked) {
+            background: #0B2349;
+            color: white;
+            font-weight: 700;
+        }
+
+        .scan-mode-toggle-left label:hover:not(:has(input:checked)) {
+            background: #e9ecef;
+        }
+
+        .scan-mode-toggle-left span {
+            display: block;
+        }
+
+        .scan-input-group {
+            display: flex;
+            flex: 1;
+            gap: 0;
+        }
+
+        .scan-input-group input {
+            flex: 1;
+            padding: 16px 20px;
+            border: none;
+            font-size: 18px;
+            font-weight: 400;
+            color: #495057;
+        }
+
+        .scan-input-group input:focus {
+            outline: none;
+        }
+
+        .scan-input-group input::placeholder {
+            color: #adb5bd;
+            font-weight: 400;
+        }
+
+        .scan-input-group button {
+            padding: 16px 28px;
+            background: white;
+            color: #adb5bd;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            border-left: 2px solid #e9ecef;
+        }
+
+        .scan-input-group button:hover {
+            color: #85D0D7;
+        }
+
+        /* KEYPAD */
+        .keypad-display {
+            background: #212529;
+            color: #0f0;
+            padding: 20px;
+            border-radius: 6px;
+            font-size: 32px;
+            font-weight: 700;
+            text-align: right;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .keypad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .keypad-btn {
+            padding: 16px;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 22px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .keypad-btn:hover {
+            background: #85D0D7;
+            color: white;
+            border-color: #85D0D7;
+            transform: scale(1.05);
+        }
+
+        .keypad-actions {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 10px;
+        }
+
+        .clear-btn {
+            padding: 14px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .add-custom-btn {
+            padding: 14px;
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .add-custom-btn:hover {
+            background: #e0a800;
+            transform: translateY(-2px);
+        }
+
+        /* QUICK ACTIONS */
+        .customer-email-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .quick-actions-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .action-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .discount-btn {
+            background: #85D0D7;
+            color: white;
+        }
+
+        .discount-btn:hover {
+            background: #6dbfc7;
+            transform: translateY(-2px);
+        }
+
+        .clear-cart-btn {
+            background: #CB9C9B;
+            color: white;
+        }
+
+        .clear-cart-btn:hover {
+            background: #b87d7c;
+        }
+
+        .complete-sale-btn {
+            background: linear-gradient(135deg, #0B2349, #164a7a);
+            color: white;
+            padding: 24px;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(11, 35, 73, 0.3);
+        }
+
+        .complete-sale-btn:hover {
+            background: linear-gradient(135deg, #061628, #0d3557);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(11, 35, 73, 0.4);
+        }
+
+        @media screen and (max-width: 1024px) {
+            .pos-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="pos-header">
+        <div class="pos-header-left">
+            <img src="https://via.placeholder.com/150x50/0B2349/ffffff?text=Your+Logo" alt="Store Logo" class="pos-logo">
+        </div>
+        <div class="pos-header-center">
+            <div class="scan-input-wrapper">
+                <div class="scan-mode-toggle-left">
+                    <label>
+                        <input type="radio" name="scan-mode" checked>
+                        <span>Scan</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="scan-mode">
+                        <span>Enter</span>
+                    </label>
+                </div>
+                <div class="scan-input-group">
+                    <input type="text" placeholder="Scan product/order" autofocus id="header-scan-input">
+                    <button>search fields</button>
+                </div>
+            </div>
+        </div>
+        <button class="fullscreen-btn">⛶ Exit Fullscreen</button>
+    </div>
+
+    <div class="pos-container">
+        <!-- LEFT SIDE: SHOPPING CART -->
+        <div class="cart-section">
+            <div class="cart-header">
+                🛒 Cart Items (8)
+            </div>
+
+            <div class="cart-items">
+                <!-- Cart Item 1 -->
+                <div class="cart-item">
+                    <div class="cart-item-image">👕</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Blue T-Shirt</div>
+                        <div class="cart-item-sku">SKU: TS-001</div>
+                        <div class="cart-item-price">$25.00</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 2</div>
+                        <div class="item-subtotal">$50.00</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+
+                <!-- Cart Item 2 -->
+                <div class="cart-item">
+                    <div class="cart-item-image">🧢</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Red Hat</div>
+                        <div class="cart-item-sku">SKU: HAT-045</div>
+                        <div class="cart-item-price">$15.00</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 1</div>
+                        <div class="item-subtotal">$15.00</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+
+                <!-- Cart Item 3 - Custom -->
+                <div class="cart-item" style="border-left-color: #ffc107;">
+                    <div class="cart-item-image">💵</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Custom Item</div>
+                        <div class="cart-item-sku">SKU: CUSTOM-123456</div>
+                        <div class="cart-item-price">$10.00</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 1</div>
+                        <div class="item-subtotal">$10.00</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+
+                <!-- Cart Item 4 -->
+                <div class="cart-item">
+                    <div class="cart-item-image">👟</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Running Shoes</div>
+                        <div class="cart-item-sku">SKU: SHOE-789</div>
+                        <div class="cart-item-price">$89.99</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 1</div>
+                        <div class="item-subtotal">$89.99</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+
+                <!-- Cart Item 5 -->
+                <div class="cart-item">
+                    <div class="cart-item-image">🎒</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Backpack</div>
+                        <div class="cart-item-sku">SKU: BAG-202</div>
+                        <div class="cart-item-price">$45.50</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 2</div>
+                        <div class="item-subtotal">$91.00</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+
+                <!-- Cart Item 6 -->
+                <div class="cart-item">
+                    <div class="cart-item-image">⌚</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Smart Watch</div>
+                        <div class="cart-item-sku">SKU: WATCH-555</div>
+                        <div class="cart-item-price">$199.00</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 1</div>
+                        <div class="item-subtotal">$199.00</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+
+                <!-- Cart Item 7 -->
+                <div class="cart-item">
+                    <div class="cart-item-image">🕶️</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Sunglasses</div>
+                        <div class="cart-item-sku">SKU: SUN-101</div>
+                        <div class="cart-item-price">$35.00</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 3</div>
+                        <div class="item-subtotal">$105.00</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+
+                <!-- Cart Item 8 -->
+                <div class="cart-item">
+                    <div class="cart-item-image">📱</div>
+                    <div class="cart-item-details">
+                        <div class="cart-item-title">Phone Case</div>
+                        <div class="cart-item-sku">SKU: CASE-888</div>
+                        <div class="cart-item-price">$12.99</div>
+                    </div>
+                    <div class="cart-item-qty">
+                        <div class="qty-display">Qty: 1</div>
+                        <div class="item-subtotal">$12.99</div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                </div>
+            </div>
+
+            <!-- TOTALS -->
+            <div class="cart-totals">
+                <div class="total-row subtotal">
+                    <span>Subtotal:</span>
+                    <span>$562.48</span>
+                </div>
+                <div class="total-row discount">
+                    <span>Discount (SAVE10):</span>
+                    <span>−$56.25</span>
+                </div>
+                <div class="total-row final">
+                    <span>TOTAL:</span>
+                    <span>$506.23</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDE: ACTIONS -->
+        <div class="actions-section">
+
+            <!-- KEYPAD PANEL -->
+            <div class="keypad-panel">
+                <div class="keypad-display">$0.00</div>
+                <div class="keypad-grid">
+                    <button class="keypad-btn">7</button>
+                    <button class="keypad-btn">8</button>
+                    <button class="keypad-btn">9</button>
+                    <button class="keypad-btn">4</button>
+                    <button class="keypad-btn">5</button>
+                    <button class="keypad-btn">6</button>
+                    <button class="keypad-btn">1</button>
+                    <button class="keypad-btn">2</button>
+                    <button class="keypad-btn">3</button>
+                    <button class="keypad-btn">0</button>
+                    <button class="keypad-btn">00</button>
+                    <button class="keypad-btn">.</button>
+                </div>
+                <div class="keypad-actions">
+                    <button class="clear-btn">Clear</button>
+                    <button class="add-custom-btn">Add Custom Item</button>
+                </div>
+            </div>
+
+            <!-- QUICK ACTIONS -->
+            <div class="quick-actions-panel">
+                <input type="email" class="customer-email-input" placeholder="Customer Email (optional)">
+                <div class="quick-actions-row">
+                    <button class="action-btn discount-btn">🎟️ Apply Discount</button>
+                    <button class="action-btn clear-cart-btn">🗑️ Clear Cart</button>
+                </div>
+                <button class="action-btn complete-sale-btn">✓ COMPLETE SALE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Demo interaction
+        document.querySelectorAll('.keypad-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const display = document.querySelector('.keypad-display');
+                const value = this.textContent;
+                let current = display.textContent.replace('$', '');
+
+                if (current === '0.00') {
+                    current = '';
+                }
+
+                display.textContent = '$' + (current + value);
+            });
+        });
+
+        document.querySelector('.clear-btn').addEventListener('click', function() {
+            document.querySelector('.keypad-display').textContent = '$0.00';
+        });
+
+        document.querySelector('.complete-sale-btn').addEventListener('click', function() {
+            alert('Order #1234 created successfully!\nTotal: $67.50\n\nPlease enter this amount into Square POS.');
+        });
+
+        // Auto-focus on header input
+        document.getElementById('header-scan-input').focus();
+    </script>
+</body>
+</html>
