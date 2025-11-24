@@ -19,6 +19,9 @@ class WBS_Admin {
 
         // Add admin notice for POS link
         add_action('admin_notices', array($this, 'pos_link_notice'));
+
+        // Register settings
+        add_action('admin_init', array($this, 'register_settings'));
     }
 
     public function pos_link_notice() {
@@ -93,6 +96,16 @@ class WBS_Admin {
             'manage_woocommerce',
             'wbs-pos-frontend',
             array($this, 'pos_frontend_redirect')
+        );
+
+        // Settings page
+        add_submenu_page(
+            'woo-barcode-scanner',
+            'Settings',
+            'Settings',
+            'manage_woocommerce',
+            'wbs-settings',
+            array($this, 'settings_page')
         );
     }
     
@@ -1548,6 +1561,54 @@ class WBS_Admin {
             $query->set('meta_key', '_verified');
             $query->set('orderby', 'meta_value');
         }
+    }
+
+    public function register_settings() {
+        register_setting('wbs_settings_group', 'wbs_frontend_on_floor_filter');
+    }
+
+    public function settings_page() {
+        // Handle form submission
+        if (isset($_POST['wbs_save_settings']) && check_admin_referer('wbs_settings_nonce')) {
+            $enable_filter = isset($_POST['wbs_frontend_on_floor_filter']) ? '1' : '0';
+            update_option('wbs_frontend_on_floor_filter', $enable_filter);
+            echo '<div class="notice notice-success is-dismissible"><p>Settings saved successfully!</p></div>';
+        }
+
+        $filter_enabled = get_option('wbs_frontend_on_floor_filter', '0');
+        ?>
+        <div class="wrap">
+            <h1>Barcode Scanner Settings</h1>
+
+            <form method="post" action="">
+                <?php wp_nonce_field('wbs_settings_nonce'); ?>
+
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="wbs_frontend_on_floor_filter">Frontend Product Filter</label>
+                        </th>
+                        <td>
+                            <label>
+                                <input type="checkbox"
+                                       id="wbs_frontend_on_floor_filter"
+                                       name="wbs_frontend_on_floor_filter"
+                                       value="1"
+                                       <?php checked($filter_enabled, '1'); ?>>
+                                Show only "On the Floor" products on frontend
+                            </label>
+                            <p class="description">
+                                When enabled, only products explicitly marked as "On the Floor" will be visible on the frontend (e.g., in Elementor loop grids and WooCommerce shop pages).
+                                Products without this status or marked as "Not on the Floor" will be hidden from customers.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <?php submit_button('Save Settings', 'primary', 'wbs_save_settings'); ?>
+            </form>
+        </div>
+        <?php
     }
 
     public function pos_frontend_redirect() {
