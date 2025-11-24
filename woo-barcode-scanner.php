@@ -65,6 +65,7 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
             require_once WBS_PLUGIN_PATH . 'includes/class-wbs-audit-db.php';
             require_once WBS_PLUGIN_PATH . 'includes/class-wbs-audit-logger.php';
             require_once WBS_PLUGIN_PATH . 'includes/class-wbs-audit-reports.php';
+            require_once WBS_PLUGIN_PATH . 'includes/class-wbs-public.php';
         }
         
         private function init_hooks() {
