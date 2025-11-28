@@ -180,6 +180,13 @@ jQuery(document).ready(function($) {
                             'color': '#ffffff'
                         });
                         // No notification - button change is enough visual feedback
+                    } else if (response.data.stock_status === 'outofstock') {
+                        // Product is out of stock - show error with order info
+                        if (response.data.last_order_info) {
+                            showNotification('Out of Stock - Purchased in Order #' + response.data.last_order_info.order_number, 'error');
+                        } else {
+                            showNotification('Out of Stock - No order found', 'error');
+                        }
                     } else {
                         addProductToCart(response.data);
                     }

@@ -168,4 +168,78 @@ class WBS_Audit_DB {
 
         return $table_exists === $scan_audits_table;
     }
+
+    /**
+     * Add performance indexes for meta queries
+     *
+     * Creates indexes on postmeta table for _old_sku and _verified lookups
+     * which are used heavily in barcode scanning and frontend filtering.
+     */
+    public static function add_performance_indexes() {
+        global $wpdb;
+
+        error_log('WBS: Adding performance indexes...');
+
+        // Check if indexes already exist before creating
+        $existing_indexes = $wpdb->get_results(
+            "SHOW INDEX FROM {$wpdb->postmeta} WHERE Key_name IN ('wbs_old_sku_lookup', 'wbs_verified_lookup')"
+        );
+
+        $existing_index_names = array();
+        foreach ($existing_indexes as $index) {
+            $existing_index_names[] = $index->Key_name;
+        }
+
+        // Index for _old_sku lookups (barcode scanning fallback)
+        // This dramatically speeds up the query: SELECT post_id FROM postmeta WHERE meta_key = '_old_sku' AND meta_value = %s
+        if (!in_array('wbs_old_sku_lookup', $existing_index_names)) {
+            $result = $wpdb->query(
+                "CREATE INDEX wbs_old_sku_lookup ON {$wpdb->postmeta} (meta_key(32), meta_value(100))"
+            );
+            if ($result !== false) {
+                error_log('WBS: Created wbs_old_sku_lookup index');
+            } else {
+                error_log('WBS: Failed to create wbs_old_sku_lookup index: ' . $wpdb->last_error);
+            }
+        } else {
+            error_log('WBS: wbs_old_sku_lookup index already exists');
+        }
+
+        // Index for _verified lookups (frontend product filtering)
+        // This speeds up the meta_query for 'On the Floor' products
+        if (!in_array('wbs_verified_lookup', $existing_index_names)) {
+            $result = $wpdb->query(
+                "CREATE INDEX wbs_verified_lookup ON {$wpdb->postmeta} (meta_key(32), meta_value(50))"
+            );
+            if ($result !== false) {
+                error_log('WBS: Created wbs_verified_lookup index');
+            } else {
+                error_log('WBS: Failed to create wbs_verified_lookup index: ' . $wpdb->last_error);
+            }
+        } else {
+            error_log('WBS: wbs_verified_lookup index already exists');
+        }
+
+        // Store that we've attempted to add indexes
+        update_option('wbs_performance_indexes_added', '1.0');
+    }
+
+    /**
+     * Remove performance indexes on uninstall
+     */
+    public static function remove_performance_indexes() {
+        global $wpdb;
+
+        // Check and drop indexes if they exist
+        $existing_indexes = $wpdb->get_results(
+            "SHOW INDEX FROM {$wpdb->postmeta} WHERE Key_name IN ('wbs_old_sku_lookup', 'wbs_verified_lookup')"
+        );
+
+        foreach ($existing_indexes as $index) {
+            $wpdb->query("DROP INDEX {$index->Key_name} ON {$wpdb->postmeta}");
+            error_log("WBS: Dropped index {$index->Key_name}");
+        }
+
+        delete_option('wbs_performance_indexes_added');
+    }
 }

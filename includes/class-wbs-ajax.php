@@ -63,6 +63,14 @@ class WBS_Ajax {
 
         $product_data = $this->get_product_data($product);
 
+        // For POS context, check if product is out of stock and get order info
+        if ($scan_context === 'pos' && $product_data['stock_status'] === 'outofstock') {
+            $order_info = $this->get_product_order_info($product->get_id());
+            if ($order_info) {
+                $product_data['last_order_info'] = $order_info;
+            }
+        }
+
         // Log successful scan
         WBS_Audit_Logger::log_scan(array(
             'product_id' => $product->get_id(),
@@ -188,7 +196,22 @@ class WBS_Ajax {
             
             // Clear any caches
             wc_delete_product_transients($product_id);
-            
+
+            // Clear WBS product data cache
+            delete_transient('wbs_product_data_' . $product_id);
+
+            // Clear SKU cache if SKU might have changed
+            $sku = $product->get_sku();
+            if ($sku) {
+                delete_transient('wbs_sku_' . md5($sku));
+            }
+
+            // Clear old_sku cache
+            $old_sku = get_post_meta($product_id, '_old_sku', true);
+            if ($old_sku) {
+                delete_transient('wbs_sku_' . md5($old_sku));
+            }
+
             wp_send_json_success('Product updated successfully');
             
         } catch (Exception $e) {
@@ -196,24 +219,48 @@ class WBS_Ajax {
         }
     }
     
+    /**
+     * Find product by SKU with caching
+     *
+     * Uses transient caching to avoid repeated database queries for the same SKU.
+     * Cache TTL: 5 minutes
+     *
+     * @param string $search_term SKU or old SKU to search for
+     * @return WC_Product|false Product object or false if not found
+     */
     private function find_product_by_sku($search_term) {
+        // Check transient cache first
+        $cache_key = 'wbs_sku_' . md5($search_term);
+        $cached_product_id = get_transient($cache_key);
+
+        if ($cached_product_id !== false) {
+            // Cache hit - return product or false for "not found" cache
+            if ($cached_product_id === 0) {
+                return false; // Cached "not found" result
+            }
+            return wc_get_product($cached_product_id);
+        }
+
+        // Cache miss - perform lookup
         // First try to find by regular SKU
         $product_id = wc_get_product_id_by_sku($search_term);
 
-        if ($product_id) {
-            return wc_get_product($product_id);
+        if (!$product_id) {
+            // If not found, try to find by old_sku custom field
+            global $wpdb;
+
+            $product_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT post_id FROM {$wpdb->postmeta}
+                WHERE meta_key = '_old_sku'
+                AND meta_value = %s
+                LIMIT 1",
+                $search_term
+            ));
         }
 
-        // If not found, try to find by old_sku custom field
-        global $wpdb;
-
-        $product_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT post_id FROM {$wpdb->postmeta}
-            WHERE meta_key = '_old_sku'
-            AND meta_value = %s
-            LIMIT 1",
-            $search_term
-        ));
+        // Cache the result (including "not found" as 0)
+        // 5 minute cache TTL
+        set_transient($cache_key, $product_id ? (int) $product_id : 0, 5 * MINUTE_IN_SECONDS);
 
         if ($product_id) {
             $product = wc_get_product($product_id);
@@ -225,46 +272,59 @@ class WBS_Ajax {
         return false;
     }
     
+    /**
+     * Static cache for consignor lookups within same request
+     * @var array
+     */
+    private static $consignor_cache = array();
+
+    /**
+     * Get product data with caching and optimized queries
+     *
+     * Uses transient caching for full product data and batches meta queries
+     * to reduce database load.
+     *
+     * @param WC_Product $product Product object
+     * @return array Product data array
+     */
     private function get_product_data($product) {
+        $product_id = $product->get_id();
+
+        // Check transient cache first
+        $cache_key = 'wbs_product_data_' . $product_id;
+        $cached_data = get_transient($cache_key);
+
+        if ($cached_data !== false) {
+            return $cached_data;
+        }
+
         global $wpdb;
 
-        $product_id = $product->get_id();
-        $categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
+        // Batch fetch all custom meta in a single query instead of multiple get_post_meta calls
+        $custom_meta = $this->get_multiple_post_meta($product_id, array('_consignor_id', '_old_sku', '_verified'));
 
-        // Get consignor information
-        $consignor_id = get_post_meta($product_id, '_consignor_id', true);
-        $consignor_number = '';
+        $consignor_id = $custom_meta['_consignor_id'] ?? '';
+        $old_sku = $custom_meta['_old_sku'] ?? '';
+        $verified = $custom_meta['_verified'] ?? 'not-on-the-floor';
 
-        if ($consignor_id) {
-            $consignors_table = $wpdb->prefix . 'consignors';
-            $consignor = $wpdb->get_row($wpdb->prepare(
-                "SELECT consignor_number FROM $consignors_table WHERE id = %d",
-                $consignor_id
-            ));
-
-            if ($consignor) {
-                $consignor_number = $consignor->consignor_number;
-            }
-        }
-
-        // Get product image
-        $image_id = $product->get_image_id();
-        $image_url = '';
-
-        if ($image_id) {
-            $image_url = wp_get_attachment_image_url($image_id, 'medium');
-        }
-
-        // Get old_sku custom field
-        $old_sku = get_post_meta($product_id, '_old_sku', true);
-
-        // Get verification status
-        $verified = get_post_meta($product_id, '_verified', true);
         if (empty($verified)) {
             $verified = 'not-on-the-floor'; // Default value
         }
 
-        return array(
+        // Get consignor number with static caching
+        $consignor_number = '';
+        if ($consignor_id) {
+            $consignor_number = $this->get_consignor_number($consignor_id);
+        }
+
+        // Get product image URL
+        $image_id = $product->get_image_id();
+        $image_url = $image_id ? wp_get_attachment_image_url($image_id, 'medium') : '';
+
+        // Get categories
+        $categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
+
+        $data = array(
             'id' => $product_id,
             'title' => $product->get_name() ?: '',
             'sku' => $product->get_sku() ?: '',
@@ -282,16 +342,105 @@ class WBS_Ajax {
             'image_url' => $image_url ?: '',
             'verified' => $verified
         );
+
+        // Cache the result for 5 minutes
+        set_transient($cache_key, $data, 5 * MINUTE_IN_SECONDS);
+
+        return $data;
     }
 
-    private function get_product_order_info($product_id) {
+    /**
+     * Batch fetch multiple meta keys in a single query
+     *
+     * @param int   $post_id Post ID
+     * @param array $keys    Array of meta keys to fetch
+     * @return array Associative array of meta_key => meta_value
+     */
+    private function get_multiple_post_meta($post_id, $keys) {
         global $wpdb;
 
-        // Query order items to find orders containing this product
-        $order_item_id = $wpdb->get_var($wpdb->prepare(
+        if (empty($keys)) {
+            return array();
+        }
+
+        // Build placeholders for the IN clause
+        $placeholders = implode(',', array_fill(0, count($keys), '%s'));
+
+        // Merge post_id with keys for prepare
+        $query_args = array_merge(array($post_id), $keys);
+
+        $results = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT meta_key, meta_value FROM {$wpdb->postmeta}
+                WHERE post_id = %d AND meta_key IN ($placeholders)",
+                $query_args
+            ),
+            OBJECT_K
+        );
+
+        // Build return array with all requested keys
+        $meta = array();
+        foreach ($keys as $key) {
+            $meta[$key] = isset($results[$key]) ? $results[$key]->meta_value : '';
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Get consignor number with static caching
+     *
+     * Caches consignor lookups within the same request to avoid
+     * repeated queries for the same consignor.
+     *
+     * @param int $consignor_id Consignor ID
+     * @return string Consignor number or empty string
+     */
+    private function get_consignor_number($consignor_id) {
+        // Check static cache first
+        if (isset(self::$consignor_cache[$consignor_id])) {
+            return self::$consignor_cache[$consignor_id];
+        }
+
+        global $wpdb;
+        $consignors_table = $wpdb->prefix . 'consignors';
+
+        $consignor_number = $wpdb->get_var($wpdb->prepare(
+            "SELECT consignor_number FROM $consignors_table WHERE id = %d",
+            $consignor_id
+        ));
+
+        // Cache the result (even empty results)
+        self::$consignor_cache[$consignor_id] = $consignor_number ?: '';
+
+        return self::$consignor_cache[$consignor_id];
+    }
+
+    /**
+     * Lightweight order lookup for POS stock check
+     * Returns just order_number with caching - optimized for performance
+     *
+     * @param int $product_id Product ID
+     * @return array|null Minimal order info or null
+     */
+    private function get_product_order_info($product_id) {
+        // Check transient cache first
+        $cache_key = 'wbs_product_order_' . $product_id;
+        $cached = get_transient($cache_key);
+
+        if ($cached !== false) {
+            return $cached === 'none' ? null : $cached;
+        }
+
+        global $wpdb;
+
+        // Single optimized query to get order_id and order_number directly
+        // Uses HPOS-compatible approach: check both post-based and HPOS orders
+        $order_id = $wpdb->get_var($wpdb->prepare(
             "SELECT order_items.order_id
             FROM {$wpdb->prefix}woocommerce_order_items as order_items
-            LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta as order_item_meta ON order_items.order_item_id = order_item_meta.order_item_id
+            INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta as order_item_meta
+                ON order_items.order_item_id = order_item_meta.order_item_id
             WHERE order_items.order_item_type = 'line_item'
             AND order_item_meta.meta_key = '_product_id'
             AND order_item_meta.meta_value = %d
@@ -300,11 +449,61 @@ class WBS_Ajax {
             $product_id
         ));
 
-        if (!$order_item_id) {
+        if (!$order_id) {
+            // Cache "not found" to avoid repeated queries
+            set_transient($cache_key, 'none', 5 * MINUTE_IN_SECONDS);
             return null;
         }
 
-        $order = wc_get_order($order_item_id);
+        // Get just the order number - avoid loading full WC_Order object
+        $order_number = $order_id; // Default to order_id
+
+        // Check if custom order number exists (some plugins use this)
+        $custom_order_number = get_post_meta($order_id, '_order_number', true);
+        if ($custom_order_number) {
+            $order_number = $custom_order_number;
+        }
+
+        $result = array(
+            'order_id' => $order_id,
+            'order_number' => $order_number
+        );
+
+        // Cache for 5 minutes
+        set_transient($cache_key, $result, 5 * MINUTE_IN_SECONDS);
+
+        return $result;
+    }
+
+    /**
+     * Full order info lookup (used by admin scanner)
+     * Returns complete order details
+     *
+     * @param int $product_id Product ID
+     * @return array|null Full order info or null
+     */
+    private function get_product_order_info_full($product_id) {
+        global $wpdb;
+
+        // Query order items to find orders containing this product
+        $order_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT order_items.order_id
+            FROM {$wpdb->prefix}woocommerce_order_items as order_items
+            INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta as order_item_meta
+                ON order_items.order_item_id = order_item_meta.order_item_id
+            WHERE order_items.order_item_type = 'line_item'
+            AND order_item_meta.meta_key = '_product_id'
+            AND order_item_meta.meta_value = %d
+            ORDER BY order_items.order_id DESC
+            LIMIT 1",
+            $product_id
+        ));
+
+        if (!$order_id) {
+            return null;
+        }
+
+        $order = wc_get_order($order_id);
 
         if (!$order) {
             return null;
@@ -338,11 +537,11 @@ class WBS_Ajax {
         }
 
         return array(
-            'order_id' => $order_item_id,
+            'order_id' => $order_id,
             'order_number' => $order->get_order_number(),
             'order_status' => $order->get_status(),
             'order_date' => $order->get_date_created()->date('Y-m-d H:i:s'),
-            'order_edit_url' => admin_url('post.php?post=' . $order_item_id . '&action=edit'),
+            'order_edit_url' => admin_url('post.php?post=' . $order_id . '&action=edit'),
             'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()) ?: $order->get_billing_email(),
             'customer_email' => $customer_email,
             'customer_phone' => $customer_phone ?: 'N/A',
@@ -638,7 +837,8 @@ class WBS_Ajax {
             wp_send_json_error('Product ID is required');
         }
 
-        $order_info = $this->get_product_order_info($product_id);
+        // Use full version for admin scanner (needs all order details)
+        $order_info = $this->get_product_order_info_full($product_id);
 
         if ($order_info) {
             wp_send_json_success($order_info);
@@ -674,6 +874,9 @@ class WBS_Ajax {
         try {
             // Update verification status to "on-the-floor"
             update_post_meta($product_id, '_verified', 'on-the-floor');
+
+            // Clear WBS product data cache since verified status changed
+            delete_transient('wbs_product_data_' . $product_id);
 
             wp_send_json_success(array(
                 'message' => 'Product marked as On the Floor',
