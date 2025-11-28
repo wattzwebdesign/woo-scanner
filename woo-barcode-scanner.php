@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Barcode Scanner
  * Plugin URI: https://codewattz.com
  * Description: Scan barcodes to quickly find and edit WooCommerce products
- * Version: 1.3.2
+ * Version: 1.3.3
  * Author: Code Wattz
  * License: GPL v2 or later
  * Requires at least: 5.0
@@ -56,7 +56,7 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         private function define_constants() {
             define('WBS_PLUGIN_URL', plugin_dir_url(__FILE__));
             define('WBS_PLUGIN_PATH', plugin_dir_path(__FILE__));
-            define('WBS_VERSION', '1.3.2');
+            define('WBS_VERSION', '1.3.3');
         }
         
         private function includes() {
