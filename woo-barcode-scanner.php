@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Barcode Scanner
  * Plugin URI: https://codewattz.com
  * Description: Scan barcodes to quickly find and edit WooCommerce products
- * Version: 1.3.2
+ * Version: 1.3.3
  * Author: Code Wattz
  * License: GPL v2 or later
  * Requires at least: 5.0
@@ -56,7 +56,7 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
         private function define_constants() {
             define('WBS_PLUGIN_URL', plugin_dir_url(__FILE__));
             define('WBS_PLUGIN_PATH', plugin_dir_path(__FILE__));
-            define('WBS_VERSION', '1.3.2');
+            define('WBS_VERSION', '1.3.3');
         }
         
         private function includes() {
@@ -83,6 +83,22 @@ if (!class_exists('WooBarcodeScannerPlugin')) {
 
             // Audit cleanup cron job
             add_action('wbs_audit_cleanup', array('WBS_Audit_DB', 'cleanup_old_data'));
+
+            // Check for performance indexes on admin init (for existing installations)
+            add_action('admin_init', array($this, 'maybe_add_performance_indexes'));
+        }
+
+        /**
+         * Add performance indexes if not already added (for existing installations)
+         */
+        public function maybe_add_performance_indexes() {
+            // Only run once - check if indexes have been added
+            if (get_option('wbs_performance_indexes_added')) {
+                return;
+            }
+
+            // Add the performance indexes
+            WBS_Audit_DB::add_performance_indexes();
         }
         
         public function declare_hpos_compatibility() {
@@ -500,6 +516,9 @@ function wbs_activate() {
     // Create audit database tables
     require_once plugin_dir_path(__FILE__) . 'includes/class-wbs-audit-db.php';
     WBS_Audit_DB::create_tables();
+
+    // Add performance indexes for meta queries
+    WBS_Audit_DB::add_performance_indexes();
 }
 
 function wbs_deactivate() {

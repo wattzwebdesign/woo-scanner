@@ -15,7 +15,22 @@ if (!defined('ABSPATH')) {
 class WBS_Audit_Logger {
 
     /**
-     * Log a product scan event
+     * Pending log entries to be flushed on shutdown
+     * @var array
+     */
+    private static $pending_logs = array();
+
+    /**
+     * Whether the shutdown hook has been registered
+     * @var bool
+     */
+    private static $shutdown_registered = false;
+
+    /**
+     * Log a product scan event (async - writes on shutdown)
+     *
+     * This method queues the log entry to be written after the response is sent,
+     * reducing response time for barcode scans.
      *
      * @param array $args {
      *     @type int    $user_id       User ID performing the scan
@@ -26,9 +41,114 @@ class WBS_Audit_Logger {
      *     @type string $search_term   The search term/barcode scanned
      *     @type bool   $scan_success  Whether the scan found a product
      * }
-     * @return int|false The scan audit ID on success, false on failure
+     * @return bool True if queued successfully
      */
     public static function log_scan($args) {
+        // Ensure tables exist before queueing
+        if (!WBS_Audit_DB::tables_exist()) {
+            return false;
+        }
+
+        $defaults = array(
+            'user_id' => get_current_user_id(),
+            'product_id' => null,
+            'product_sku' => '',
+            'product_name' => '',
+            'scan_context' => 'unknown',
+            'search_term' => '',
+            'scan_success' => true,
+        );
+
+        $args = wp_parse_args($args, $defaults);
+
+        // Get user display name now (while user data is available)
+        $user = get_userdata($args['user_id']);
+        $args['user_display_name'] = $user ? $user->display_name : 'Unknown User';
+
+        // Capture created_at timestamp now
+        $args['created_at'] = current_time('mysql');
+
+        // Queue the log entry
+        self::$pending_logs[] = $args;
+
+        // Register shutdown hook only once
+        if (!self::$shutdown_registered) {
+            add_action('shutdown', array(__CLASS__, 'flush_pending_logs'), 0);
+            self::$shutdown_registered = true;
+        }
+
+        return true;
+    }
+
+    /**
+     * Flush all pending log entries to the database
+     * Called on shutdown after response is sent
+     */
+    public static function flush_pending_logs() {
+        if (empty(self::$pending_logs)) {
+            return;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'wbs_scan_audits';
+
+        foreach (self::$pending_logs as $args) {
+            $user_id = absint($args['user_id']);
+            $product_id = !empty($args['product_id']) ? absint($args['product_id']) : null;
+            $product_sku = sanitize_text_field($args['product_sku']);
+            $product_name = sanitize_text_field($args['product_name']);
+            $scan_context = sanitize_text_field($args['scan_context']);
+            $search_term = sanitize_text_field($args['search_term']);
+            $scan_success = (int) $args['scan_success'];
+            $user_display_name = $args['user_display_name'];
+            $created_at = $args['created_at'];
+
+            // Use direct query to handle NULL properly
+            if ($product_id === null) {
+                $query = $wpdb->prepare(
+                    "INSERT INTO {$table}
+                    (user_id, user_display_name, product_id, product_sku, product_name, scan_context, search_term, scan_success, created_at)
+                    VALUES (%d, %s, NULL, %s, %s, %s, %s, %d, %s)",
+                    $user_id,
+                    $user_display_name,
+                    $product_sku,
+                    $product_name,
+                    $scan_context,
+                    $search_term,
+                    $scan_success,
+                    $created_at
+                );
+            } else {
+                $query = $wpdb->prepare(
+                    "INSERT INTO {$table}
+                    (user_id, user_display_name, product_id, product_sku, product_name, scan_context, search_term, scan_success, created_at)
+                    VALUES (%d, %s, %d, %s, %s, %s, %s, %d, %s)",
+                    $user_id,
+                    $user_display_name,
+                    $product_id,
+                    $product_sku,
+                    $product_name,
+                    $scan_context,
+                    $search_term,
+                    $scan_success,
+                    $created_at
+                );
+            }
+
+            $wpdb->query($query);
+        }
+
+        // Clear the queue
+        self::$pending_logs = array();
+    }
+
+    /**
+     * Log a scan synchronously (for critical logging that must complete before response)
+     *
+     * @param array $args Same as log_scan()
+     * @return int|false The scan audit ID on success, false on failure
+     */
+    public static function log_scan_sync($args) {
         global $wpdb;
 
         // Ensure tables exist
@@ -57,7 +177,7 @@ class WBS_Audit_Logger {
 
         // Prepare data - use direct query for NULL handling
         $user_id = absint($args['user_id']);
-        $product_id = !empty($args['product_id']) ? absint($args['product_id']) : 'NULL';
+        $product_id = !empty($args['product_id']) ? absint($args['product_id']) : null;
         $product_sku = sanitize_text_field($args['product_sku']);
         $product_name = sanitize_text_field($args['product_name']);
         $scan_context = sanitize_text_field($args['scan_context']);
@@ -66,7 +186,7 @@ class WBS_Audit_Logger {
         $created_at = current_time('mysql');
 
         // Use direct query to handle NULL properly
-        if ($product_id === 'NULL') {
+        if ($product_id === null) {
             $query = $wpdb->prepare(
                 "INSERT INTO {$table}
                 (user_id, user_display_name, product_id, product_sku, product_name, scan_context, search_term, scan_success, created_at)
@@ -101,11 +221,8 @@ class WBS_Audit_Logger {
 
         if ($result === false) {
             error_log('WBS Audit: Failed to log scan. Error: ' . $wpdb->last_error);
-            error_log('WBS Audit: Query: ' . $query);
             return false;
         }
-
-        error_log('WBS Audit: Logged scan - Product: ' . $product_name . ', Context: ' . $scan_context . ', User: ' . $user_id);
 
         return $wpdb->insert_id;
     }
